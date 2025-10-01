@@ -4,11 +4,10 @@
 @using KST.UnizaSchedule.Api.Enums
 @using KST.UnizaSchedule.Api.ScheduleRequests
 @using RozvrhUniza.Components
-
 @inject ILogger<Home> Logger
+@inject IJSRuntime JS
 
-<PageTitle>Prehladny rozvrh - Ucitelia</PageTitle>
-
+<PageTitle>Prehľadný rozvrh - Učitelia</PageTitle>
 
 <form onsubmit="return false;">
     <div class="mb-3">
@@ -16,13 +15,13 @@
         <ul class="list-group">
             @foreach (var t in _teachers)
             {
-                <li class="list-group-item">@t.Name <button class="ms btn btn-sm btn-danger" @onclick="() => _teachers.Remove(t)">x</button></li>
+                <li class="list-group-item">@t.Name <button class="ms btn btn-sm btn-danger" @onclick="() => RemoveTeacher(t)">X</button></li>
             }
         </ul>
     </div>
 
     <div class="mb-3">
-        <label class="form-label">Pridaj</label>
+        <label class="form-label">Pridať učiteľa</label>
         <input type="text" class="form-control" value="@_name" @oninput="InputChanged" @ref="_elRef">
         @if (_suggestions.Any())
         {
@@ -34,7 +33,7 @@
             </ul>
         }
     </div>
-    <button type="submit" class="btn btn-primary" @onclick="LoadRozvrh">Submit</button>
+    <button type="submit" class="btn btn-primary" @onclick="LoadRozvrh">Zobraziť rozvrh</button>
 </form>
 
 @if (_sheduleData != null)
@@ -45,30 +44,25 @@
 @if (_hasError)
 {
     <div class="alert alert-danger" role="alert">
-        Rozvrh nenajdeny!
+        Rozvrh nenájdený!
     </div>
 }
 
 @code {
-
     private record Teacher(string PersonalNumber, string Name);
-
     private List<Teacher> _teachers = new();
     private string _name = "";
     private List<Teacher> _suggestions = new();
     private CancellationTokenSource? _cts;
-
     private ElementReference _elRef;
-
-
-    
     private bool _hasError = false;
-
     private GroupedScheduleTable? _sheduleData;
+    private const string TeachersStorageKey = "vybrani_ucitelia";
 
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
+        await LoadTeachersFromLocalStorage();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -116,11 +110,10 @@
         catch (Exception ex)
         {
             _hasError = true;
-            Logger.LogError(ex, "Fail to load schedule");
+            Logger.LogError(ex, "Nepodarilo sa načítať rozvrh");
         }
         StateHasChanged();
     }
-
 
     private async Task InputChanged(ChangeEventArgs arg)
     {
@@ -138,7 +131,7 @@
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "fail to load teachers");
+                Logger.LogError(ex, "Nepodarilo sa načítať učiteľov");
             }
         }
     }
@@ -148,10 +141,37 @@
         if (!_teachers.Contains(teacher))
         {
             _teachers.Add(teacher);
+            await SaveTeachersToLocalStorage();
         }
         _name = "";
         _suggestions = new List<Teacher>();
         await _elRef.FocusAsync();
     }
 
+    private async Task RemoveTeacher(Teacher teacher)
+    {
+        _teachers.Remove(teacher);
+        await SaveTeachersToLocalStorage();
+    }
+
+    private async Task SaveTeachersToLocalStorage()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(_teachers);
+        await JS.InvokeVoidAsync("localStorage.setItem", TeachersStorageKey, json);
+    }
+
+    private async Task LoadTeachersFromLocalStorage()
+    {
+        var json = await JS.InvokeAsync<string>("localStorage.getItem", TeachersStorageKey);
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            try
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<List<Teacher>>(json);
+                if (loaded != null)
+                    _teachers = loaded;
+            }
+            catch { }
+        }
+    }
 }

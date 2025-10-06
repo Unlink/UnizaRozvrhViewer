@@ -1,11 +1,25 @@
-/* Manifest version: j6Chxq7b */
+/* Manifest version: 98vMmwEc */
 // Caution! Be sure you understand the caveats before publishing an application with
 // offline support. See https://aka.ms/blazor-offline-considerations
 
+// Load the assets manifest generated during publish
 self.importScripts('./service-worker-assets.js');
-self.addEventListener('install', event => event.waitUntil(onInstall(event)));
+
+self.addEventListener('install', event => {
+    // Activate this service worker immediately on install
+    self.skipWaiting();
+    event.waitUntil(onInstall(event));
+});
+
 self.addEventListener('activate', event => event.waitUntil(onActivate(event)));
 self.addEventListener('fetch', event => event.respondWith(onFetch(event)));
+
+// Allow the page to tell the SW to activate immediately
+self.addEventListener('message', event => {
+    if (event && event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});
 
 const cacheNamePrefix = 'offline-cache-';
 const cacheName = `${cacheNamePrefix}${self.assetsManifest.version}`;
@@ -36,6 +50,9 @@ async function onActivate(event) {
     await Promise.all(cacheKeys
         .filter(key => key.startsWith(cacheNamePrefix) && key !== cacheName)
         .map(key => caches.delete(key)));
+
+    // Start controlling clients without waiting for next navigation
+    await self.clients.claim();
 }
 
 async function onFetch(event) {

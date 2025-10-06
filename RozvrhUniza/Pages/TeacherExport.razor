@@ -1,0 +1,410 @@
+@page "/teacher-export"
+@using KST.UnizaSchedule.Api
+@using KST.UnizaSchedule.Api.ScheduleRequests
+@using KST.UnizaSchedule.Table
+@using ClosedXML.Excel
+@inject ILogger<Home> Logger
+@inject IJSRuntime JS
+
+<PageTitle>Export rozvrhu - UËiteæ</PageTitle>
+
+<h4>Export rozvrhu do Excelu</h4>
+
+<div class="mb-3">
+    <label class="form-label">Vyhæadaù uËiteæa</label>
+    <input type="text" class="form-control" value="@_search" @oninput="OnSearchChanged" />
+    @if (_suggestions.Any())
+    {
+        <ul class="dropdown-menu d-block">
+            @foreach (var s in _suggestions)
+            {
+                <li @onclick="() => SelectTeacher(s)"><a class="dropdown-item">@s.Name</a></li>
+            }
+        </ul>
+    }
+</div>
+
+<div class="form-check mb-3">
+    <input class="form-check-input" type="checkbox" id="includeBlocks" @bind="_includeBlocks" />
+    <label class="form-check-label" for="includeBlocks">Zahrn˙ù bloky</label>
+</div>
+
+@if (_subjectEditor.Any())
+{
+    <h5>N·zvy predmetov</h5>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th style="width: 55%">Ofici·lny n·zov</th>
+                    <th style="width: 35%">Moja skratka</th>
+                    <th style="width: 10%"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _subjectEditor)
+                {
+                    <tr>
+                        <td>@item.Name</td>
+                        <td>
+                            <input class="form-control form-control-sm" @bind-value="item.Alias" @bind-value:event="oninput" />
+                        </td>
+                        <td>
+                            <button class="btn btn-outline-secondary btn-sm" title="Vymazaù skratku" @onclick="() => { item.Alias = string.Empty; }">X</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <button class="btn btn-outline-primary btn-sm" @onclick="SaveSubjectAliasesToLocalStorage">Uloûiù n·zvy</button>
+}
+
+@if (_selectedTeacher is not null)
+{
+    <div class="alert alert-info mt-3">Vybran˝ uËiteæ: <strong>@_selectedTeacher.Name</strong></div>
+    <button class="btn btn-success" @onclick="ExportExcel">Exportovaù do Excelu</button>
+}
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@code {
+    private record Teacher(string PersonalNumber, string Name);
+    private class SubjectAliasItem { public string Name { get; set; } = string.Empty; public string Alias { get; set; } = string.Empty; }
+
+    private string _search = string.Empty;
+    private List<Teacher> _suggestions = new();
+    private Teacher? _selectedTeacher;
+    private string? _error;
+    private CancellationTokenSource? _cts;
+    private bool _includeBlocks = true;
+
+    // editor state
+    private List<SubjectAliasItem> _subjectEditor = new();
+    private Dictionary<string, string> _subjectAliases = new();
+
+    private string AliasesStorageKey => _selectedTeacher is null
+        ? "subject_aliases"
+        : $"subject_aliases_{_selectedTeacher.PersonalNumber}";
+
+    private async Task OnSearchChanged(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? string.Empty;
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_search) || _search.Length < 3)
+        {
+            _suggestions.Clear();
+            _selectedTeacher = null;
+            _subjectEditor.Clear();
+            return;
+        }
+        var cts = new CancellationTokenSource();
+        _cts?.Cancel();
+        _cts = cts;
+        try
+        {
+            var result = await ScheduleApi.GetUnizaTeachers(_search, cts.Token);
+            _suggestions = result.Select(x => new Teacher(x.Id, x.Name)).ToList();
+        }
+        catch (Exception ex)
+        {
+            if (ex is not TaskCanceledException)
+            {
+                Logger.LogError(ex, "Nepodarilo sa naËÌtaù uËiteæov");
+                _error = "Nepodarilo sa naËÌtaù uËiteæov";
+            }
+        }
+    }
+
+    private async Task SelectTeacher(Teacher t)
+    {
+        _selectedTeacher = t;
+        _search = t.Name;
+        _suggestions.Clear();
+        await BuildSubjectEditor();
+    }
+
+    private async Task BuildSubjectEditor()
+    {
+        _subjectEditor.Clear();
+        _subjectAliases.Clear();
+        if (_selectedTeacher is null) return;
+        try
+        {
+            var schedule = await ScheduleApi.GetUnizaScheduleContentAsync(new TeacherScheduleRequest(_selectedTeacher.PersonalNumber));
+            var names = schedule
+                .Select(s => s.CourseName)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct()
+                .OrderBy(n => n)
+                .ToList();
+
+            await LoadSubjectAliasesFromLocalStorage();
+
+            foreach (var n in names)
+            {
+                _subjectEditor.Add(new SubjectAliasItem
+                {
+                    Name = n!,
+                    Alias = _subjectAliases.TryGetValue(n!, out var a) ? a : string.Empty
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Nepodarilo sa pripraviù editor n·zvov predmetov");
+        }
+    }
+
+    private async Task SaveSubjectAliasesToLocalStorage()
+    {
+        // build dictionary from editor
+        _subjectAliases = _subjectEditor
+            .Where(i => !string.IsNullOrWhiteSpace(i.Name))
+            .ToDictionary(i => i.Name, i => i.Alias ?? string.Empty, StringComparer.Ordinal);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(_subjectAliases);
+        await JS.InvokeVoidAsync("localStorage.setItem", AliasesStorageKey, json);
+    }
+
+    private async Task LoadSubjectAliasesFromLocalStorage()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string>("localStorage.getItem", AliasesStorageKey);
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                if (loaded is not null)
+                {
+                    _subjectAliases = new Dictionary<string, string>(loaded, StringComparer.Ordinal);
+                }
+            }
+        }
+        catch { }
+    }
+
+    private async Task ExportExcel()
+    {
+        if (_selectedTeacher is null) return;
+        _error = null;
+        try
+        {
+            // ensure aliases are saved/loaded
+            await SaveSubjectAliasesToLocalStorage();
+            await LoadSubjectAliasesFromLocalStorage();
+
+            var schedule = await ScheduleApi.GetUnizaScheduleContentAsync(new TeacherScheduleRequest(_selectedTeacher.PersonalNumber));
+            if (schedule is null || !schedule.Any())
+            {
+                _error = "Rozvrh sa nenaöiel";
+                return;
+            }
+            var bytes = CreateExcelFromTemplate(schedule.ToList(), _selectedTeacher.Name, _includeBlocks, _subjectAliases);
+            var base64 = Convert.ToBase64String(bytes);
+            var fileName = $"Rozvrh_{SanitizeFileName(_selectedTeacher.Name)}.xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", base64);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Chyba pri exporte rozvrhu");
+            _error = "Chyba pri exporte rozvrhu";
+        }
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = System.IO.Path.GetInvalidFileNameChars();
+        return new string(name.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray());
+    }
+}
+
+@code
+{
+    private static byte[] CreateExcelFromTemplate(List<ScheduleContent> schedules, string teacherName, bool includeBlocked, Dictionary<string, string> aliases)
+    {
+        // optional filtering of blocked items
+        if (!includeBlocked)
+        {
+            schedules = schedules.Where(s => s.LessonType != KST.UnizaSchedule.Api.Enums.LessonType.Blocked).ToList();
+        }
+
+        using var templateStream = GetTemplateStream();
+        using var wb = new XLWorkbook(templateStream);
+        var ws = wb.Worksheets.First();
+
+        // 1) Title replacement (find cell containing "semester")
+        var now = DateTime.Now;
+        var sem = KST.UnizaSchedule.Api.Enums.Semester.Winter == ScheduleApiHelpers.GetSemester(now) ? "zimn˝" : "letn˝";
+        var studyYear = ScheduleApiHelpers.GetStudyYear(now);
+        var studyYearText = sem == "zimn˝" ? $"{studyYear}/{studyYear + 1}" : $"{studyYear - 1}/{studyYear}";
+        var titleText = $"{teacherName} - {sem} semester {studyYearText}";
+        var titleCell = ws.CellsUsed(c => c.GetString().Contains("semester", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+        if (titleCell is not null)
+        {
+            titleCell.Value = titleText;
+        }
+
+        // 2) Find header row with hour labels and build hour->(startCol,endCol) map using merged header cells
+        var hourCellsAll = ws.CellsUsed(c =>
+        {
+            var s2 = c.GetString();
+            return s2.EndsWith(":00", StringComparison.OrdinalIgnoreCase) && int.TryParse(s2.AsSpan(0, s2.IndexOf(':')), out _);
+        }).ToList();
+        if (!hourCellsAll.Any())
+            throw new InvalidOperationException("V öablÛne neboli n·jdenÈ hlaviËky hodÌn");
+
+        var headerRow = hourCellsAll
+            .GroupBy(c => c.Address.RowNumber)
+            .OrderByDescending(g => g.Count())
+            .First().Key;
+
+        var headerRowCells = hourCellsAll
+            .Where(c => c.Address.RowNumber == headerRow)
+            .OrderBy(c => c.Address.ColumnNumber)
+            .ToList();
+
+        // Map hour -> full merged range (start..end) in header
+        var hourToRange = new Dictionary<int, (int startCol, int endCol)>();
+        foreach (var c in headerRowCells)
+        {
+            var text = c.GetString();
+            var hour = int.Parse(text.Substring(0, text.IndexOf(':')));
+            if (hourToRange.ContainsKey(hour)) continue; // avoid duplicates
+
+            var range = c.IsMerged() ? c.MergedRange() : c.AsRange();
+            var start = range.RangeAddress.FirstAddress.ColumnNumber;
+            var end = range.RangeAddress.LastAddress.ColumnNumber;
+            hourToRange.Add(hour, (start, end));
+        }
+
+        for (var h = ScheduleTable.FirstBlockHour; h <= ScheduleTable.LastBlockHour; h++)
+        {
+            if (!hourToRange.ContainsKey(h))
+                throw new InvalidOperationException($"V öablÛne nebol n·jden˝ stÂpec pre Ëas {h}:00");
+        }
+
+        // 3) Build day->row pair map from labels (Pondelok..Piatok)
+        var dayMap = new Dictionary<DayOfWeek, (int top, int bottom)>();
+        var skDays = new (DayOfWeek day, string text)[]
+        {
+            (DayOfWeek.Monday, "Pondelok"),
+            (DayOfWeek.Tuesday, "Utorok"),
+            (DayOfWeek.Wednesday, "Streda"),
+            (DayOfWeek.Thursday, "ätvrtok"),
+            (DayOfWeek.Friday, "Piatok")
+        };
+        foreach (var (day, text) in skDays)
+        {
+            var cell = ws.CellsUsed(c => string.Equals(c.GetString(), text, StringComparison.Ordinal)).FirstOrDefault();
+            if (cell is null)
+                throw new InvalidOperationException($"V öablÛne nebol n·jden˝ riadok pre deÚ '{text}'");
+            dayMap[day] = (cell.Address.RowNumber, cell.Address.RowNumber + 1);
+        }
+
+        // 4) Order and group consecutive schedule items
+        var ordered = schedules
+            .OrderBy(s => s.Day)
+            .ThenBy(s => s.BlockNumber)
+            .ThenBy(s => s.CourseName)
+            .ToList();
+
+        int i = 0;
+        while (i < ordered.Count)
+        {
+            var cur = ordered[i];
+            int count = 1;
+            int j = i + 1;
+            while (j < ordered.Count)
+            {
+                var nx = ordered[j];
+                if (nx.Day == cur.Day &&
+                    nx.CourseName == cur.CourseName &&
+                    nx.RoomName == cur.RoomName &&
+                    nx.LessonType == cur.LessonType &&
+                    nx.SubjectShortcut == cur.SubjectShortcut &&
+                    nx.BlockNumber == cur.BlockNumber + (j - i))
+                {
+                    count++;
+                    j++;
+                }
+                else break;
+            }
+
+            var startHour = ScheduleTable.FirstBlockHour + cur.BlockNumber - 1;
+            var lastHour = startHour + count - 1;
+            var startCol = hourToRange[startHour].startCol;
+            var endCol = hourToRange[lastHour].endCol; // cover full merged area of the last hour
+
+            var (topRow, bottomRow) = dayMap[cur.Day];
+            var rng = ws.Range(topRow, startCol, bottomRow, endCol);
+            rng.Merge();
+
+            // Text content
+            var lines = new List<string>();
+            lines.Add(LessonTypeSk(cur.LessonType));
+            var subj = cur.CourseName ?? cur.SubjectShortcut;
+            if (!string.IsNullOrWhiteSpace(cur.CourseName) && aliases.TryGetValue(cur.CourseName, out var alias) && !string.IsNullOrWhiteSpace(alias))
+            {
+                subj = alias;
+            }
+            if (!string.IsNullOrWhiteSpace(subj)) lines.Add(subj);
+            if (!string.IsNullOrWhiteSpace(cur.RoomName)) lines.Add(cur.RoomName);
+            // Groups intentionally not written
+            rng.Value = string.Join("\n", lines);
+
+            // Style
+            var style = rng.Style;
+            style.Alignment.WrapText = true;
+            style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+            style.Border.OutsideBorderColor = XLColor.Black;
+            style.Font.Bold = false;
+            style.Fill.BackgroundColor = GetFill(cur.LessonType);
+
+            i = j;
+        }
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        return ms.ToArray();
+    }
+
+    private static Stream GetTemplateStream()
+    {
+        var asm = typeof(Program).Assembly; // client assembly
+        var name = asm.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith("RozvrhDverePriklad.xlsx", StringComparison.OrdinalIgnoreCase));
+        if (name is null)
+            throw new InvalidOperationException("äablÛna RozvrhDverePriklad.xlsx nebola n·jden· ako EmbeddedResource.");
+        var stream = asm.GetManifestResourceStream(name);
+        if (stream is null)
+            throw new InvalidOperationException("Nepodarilo sa otvoriù stream öablÛny RozvrhDverePriklad.xlsx.");
+        return stream;
+    }
+
+    private static XLColor GetFill(KST.UnizaSchedule.Api.Enums.LessonType type)
+    {
+        return type switch
+        {
+            KST.UnizaSchedule.Api.Enums.LessonType.Lecture => XLColor.FromHtml("#F9CB9C"), // oranûov·
+            KST.UnizaSchedule.Api.Enums.LessonType.Laboratory or KST.UnizaSchedule.Api.Enums.LessonType.Excercise => XLColor.FromHtml("#FFF2CC"), // ûlt·
+            KST.UnizaSchedule.Api.Enums.LessonType.Blocked => XLColor.FromHtml("#D5D5D5"), // siv·
+            _ => XLColor.FromHtml("#EA9999") // Ëerven·
+        };
+    }
+
+    private static string LessonTypeSk(KST.UnizaSchedule.Api.Enums.LessonType type)
+    {
+        return type switch
+        {
+            KST.UnizaSchedule.Api.Enums.LessonType.Lecture => "Predn·öka",
+            KST.UnizaSchedule.Api.Enums.LessonType.Laboratory or KST.UnizaSchedule.Api.Enums.LessonType.Excercise => "CviËenie",
+            KST.UnizaSchedule.Api.Enums.LessonType.Blocked => "Blok",
+            _ => ""
+        };
+    }
+}

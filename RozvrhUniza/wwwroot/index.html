@@ -30,7 +30,40 @@
         <a class="dismiss">🗙</a>
     </div>
     <script src="_framework/blazor.webassembly.js"></script>
-    <script>navigator.serviceWorker.register('service-worker.js');</script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' })
+                    .then(function (registration) {
+                        // If there's an existing waiting worker, tell it to activate immediately
+                        if (registration.waiting) {
+                            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        }
+
+                        // When a new service worker is found, ask it to skip waiting when installed
+                        registration.addEventListener('updatefound', function () {
+                            const newWorker = registration.installing;
+                            if (newWorker) {
+                                newWorker.addEventListener('statechange', function () {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                    }
+                                });
+                            }
+                        });
+                    })
+                    .catch(function (err) { console.warn('Service worker registration failed:', err); });
+
+                // Reload the page when the new SW takes control
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', function () {
+                    if (refreshing) return;
+                    refreshing = true;
+                    window.location.reload();
+                });
+            });
+        }
+    </script>
     <script>
         window.downloadFileFromBytes = (fileName, contentType, base64Data) => {
             const link = document.createElement('a');

@@ -1,4 +1,4 @@
-@page "/teacher-export"
+Ôªø@page "/teacher-export"
 @using KST.UnizaSchedule.Api
 @using KST.UnizaSchedule.Api.ScheduleRequests
 @using KST.UnizaSchedule.Table
@@ -6,12 +6,12 @@
 @inject ILogger<Home> Logger
 @inject IJSRuntime JS
 
-<PageTitle>Export rozvrhu - UËiteæ</PageTitle>
+<PageTitle>Export rozvrhu - Uƒçiteƒæ</PageTitle>
 
 <h4>Export rozvrhu do Excelu</h4>
 
 <div class="mb-3">
-    <label class="form-label">Vyhæadaù uËiteæa</label>
+    <label class="form-label">Vyhƒæada≈• uƒçiteƒæa</label>
     <input type="text" class="form-control" value="@_search" @oninput="OnSearchChanged" />
     @if (_suggestions.Any())
     {
@@ -26,17 +26,17 @@
 
 <div class="form-check mb-3">
     <input class="form-check-input" type="checkbox" id="includeBlocks" @bind="_includeBlocks" />
-    <label class="form-check-label" for="includeBlocks">Zahrn˙ù bloky</label>
+    <label class="form-check-label" for="includeBlocks">Zahrn√∫≈• bloky</label>
 </div>
 
 @if (_subjectEditor.Any())
 {
-    <h5>N·zvy predmetov</h5>
+    <h5>N√°zvy predmetov</h5>
     <div class="table-responsive">
         <table class="table table-sm align-middle">
             <thead>
                 <tr>
-                    <th style="width: 55%">Ofici·lny n·zov</th>
+                    <th style="width: 55%">Ofici√°lny n√°zov</th>
                     <th style="width: 35%">Moja skratka</th>
                     <th style="width: 10%"></th>
                 </tr>
@@ -50,20 +50,20 @@
                             <input class="form-control form-control-sm" @bind-value="item.Alias" @bind-value:event="oninput" />
                         </td>
                         <td>
-                            <button class="btn btn-outline-secondary btn-sm" title="Vymazaù skratku" @onclick="() => { item.Alias = string.Empty; }">X</button>
+                            <button class="btn btn-outline-secondary btn-sm" title="Vymaza≈• skratku" @onclick="() => { item.Alias = string.Empty; }">X</button>
                         </td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
-    <button class="btn btn-outline-primary btn-sm" @onclick="SaveSubjectAliasesToLocalStorage">Uloûiù n·zvy</button>
+    <button class="btn btn-outline-primary btn-sm" @onclick="SaveSubjectAliasesToLocalStorage">Ulo≈æi≈• n√°zvy</button>
 }
 
 @if (_selectedTeacher is not null)
 {
-    <div class="alert alert-info mt-3">Vybran˝ uËiteæ: <strong>@_selectedTeacher.Name</strong></div>
-    <button class="btn btn-success" @onclick="ExportExcel">Exportovaù do Excelu</button>
+    <div class="alert alert-info mt-3">Vybran√Ω uƒçiteƒæ: <strong>@_selectedTeacher.Name</strong></div>
+    <button class="btn btn-success" @onclick="ExportExcel">Exportova≈• do Excelu</button>
 }
 
 @if (_error is not null)
@@ -113,8 +113,8 @@
         {
             if (ex is not TaskCanceledException)
             {
-                Logger.LogError(ex, "Nepodarilo sa naËÌtaù uËiteæov");
-                _error = "Nepodarilo sa naËÌtaù uËiteæov";
+                Logger.LogError(ex, "Nepodarilo sa naƒç√≠ta≈• uƒçiteƒæov");
+                _error = "Nepodarilo sa naƒç√≠ta≈• uƒçiteƒæov";
             }
         }
     }
@@ -155,7 +155,7 @@
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Nepodarilo sa pripraviù editor n·zvov predmetov");
+            Logger.LogError(ex, "Nepodarilo sa pripravi≈• editor n√°zvov predmetov");
         }
     }
 
@@ -200,7 +200,7 @@
             var schedule = await ScheduleApi.GetUnizaScheduleContentAsync(new TeacherScheduleRequest(_selectedTeacher.PersonalNumber));
             if (schedule is null || !schedule.Any())
             {
-                _error = "Rozvrh sa nenaöiel";
+                _error = "Rozvrh sa nena≈°iel";
                 return;
             }
             var bytes = CreateExcelFromTemplate(schedule.ToList(), _selectedTeacher.Name, _includeBlocks, _subjectAliases);
@@ -238,9 +238,9 @@
 
         // 1) Title replacement (find cell containing "semester")
         var now = DateTime.Now;
-        var sem = KST.UnizaSchedule.Api.Enums.Semester.Winter == ScheduleApiHelpers.GetSemester(now) ? "zimn˝" : "letn˝";
+        var sem = KST.UnizaSchedule.Api.Enums.Semester.Winter == ScheduleApiHelpers.GetSemester(now) ? "zimn√Ω" : "letn√Ω";
         var studyYear = ScheduleApiHelpers.GetStudyYear(now);
-        var studyYearText = sem == "zimn˝" ? $"{studyYear}/{studyYear + 1}" : $"{studyYear - 1}/{studyYear}";
+        var studyYearText = sem == "zimn√Ω" ? $"{studyYear}/{studyYear + 1}" : $"{studyYear - 1}/{studyYear}";
         var titleText = $"{teacherName} - {sem} semester {studyYearText}";
         var titleCell = ws.CellsUsed(c => c.GetString().Contains("semester", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
         if (titleCell is not null)
@@ -255,7 +255,7 @@
             return s2.EndsWith(":00", StringComparison.OrdinalIgnoreCase) && int.TryParse(s2.AsSpan(0, s2.IndexOf(':')), out _);
         }).ToList();
         if (!hourCellsAll.Any())
-            throw new InvalidOperationException("V öablÛne neboli n·jdenÈ hlaviËky hodÌn");
+            throw new InvalidOperationException("V ≈°abl√≥ne neboli n√°jden√© hlaviƒçky hod√≠n");
 
         var headerRow = hourCellsAll
             .GroupBy(c => c.Address.RowNumber)
@@ -284,7 +284,7 @@
         for (var h = ScheduleTable.FirstBlockHour; h <= ScheduleTable.LastBlockHour; h++)
         {
             if (!hourToRange.ContainsKey(h))
-                throw new InvalidOperationException($"V öablÛne nebol n·jden˝ stÂpec pre Ëas {h}:00");
+                throw new InvalidOperationException($"V ≈°abl√≥ne nebol n√°jden√Ω stƒ∫pec pre ƒças {h}:00");
         }
 
         // 3) Build day->row pair map from labels (Pondelok..Piatok)
@@ -294,14 +294,14 @@
             (DayOfWeek.Monday, "Pondelok"),
             (DayOfWeek.Tuesday, "Utorok"),
             (DayOfWeek.Wednesday, "Streda"),
-            (DayOfWeek.Thursday, "ätvrtok"),
+            (DayOfWeek.Thursday, "≈†tvrtok"),
             (DayOfWeek.Friday, "Piatok")
         };
         foreach (var (day, text) in skDays)
         {
             var cell = ws.CellsUsed(c => string.Equals(c.GetString(), text, StringComparison.Ordinal)).FirstOrDefault();
             if (cell is null)
-                throw new InvalidOperationException($"V öablÛne nebol n·jden˝ riadok pre deÚ '{text}'");
+                throw new InvalidOperationException($"V ≈°abl√≥ne nebol n√°jden√Ω riadok pre de≈à '{text}'");
             dayMap[day] = (cell.Address.RowNumber, cell.Address.RowNumber + 1);
         }
 
@@ -379,10 +379,10 @@
         var asm = typeof(Program).Assembly; // client assembly
         var name = asm.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith("RozvrhDverePriklad.xlsx", StringComparison.OrdinalIgnoreCase));
         if (name is null)
-            throw new InvalidOperationException("äablÛna RozvrhDverePriklad.xlsx nebola n·jden· ako EmbeddedResource.");
+            throw new InvalidOperationException("≈†abl√≥na RozvrhDverePriklad.xlsx nebola n√°jden√° ako EmbeddedResource.");
         var stream = asm.GetManifestResourceStream(name);
         if (stream is null)
-            throw new InvalidOperationException("Nepodarilo sa otvoriù stream öablÛny RozvrhDverePriklad.xlsx.");
+            throw new InvalidOperationException("Nepodarilo sa otvori≈• stream ≈°abl√≥ny RozvrhDverePriklad.xlsx.");
         return stream;
     }
 
@@ -390,10 +390,10 @@
     {
         return type switch
         {
-            KST.UnizaSchedule.Api.Enums.LessonType.Lecture => XLColor.FromHtml("#F9CB9C"), // oranûov·
-            KST.UnizaSchedule.Api.Enums.LessonType.Laboratory or KST.UnizaSchedule.Api.Enums.LessonType.Excercise => XLColor.FromHtml("#FFF2CC"), // ûlt·
-            KST.UnizaSchedule.Api.Enums.LessonType.Blocked => XLColor.FromHtml("#D5D5D5"), // siv·
-            _ => XLColor.FromHtml("#EA9999") // Ëerven·
+            KST.UnizaSchedule.Api.Enums.LessonType.Lecture => XLColor.FromHtml("#F9CB9C"), // oran≈æov√°
+            KST.UnizaSchedule.Api.Enums.LessonType.Laboratory or KST.UnizaSchedule.Api.Enums.LessonType.Excercise => XLColor.FromHtml("#FFF2CC"), // ≈ælt√°
+            KST.UnizaSchedule.Api.Enums.LessonType.Blocked => XLColor.FromHtml("#D5D5D5"), // siv√°
+            _ => XLColor.FromHtml("#EA9999") // ƒçerven√°
         };
     }
 
@@ -401,8 +401,8 @@
     {
         return type switch
         {
-            KST.UnizaSchedule.Api.Enums.LessonType.Lecture => "Predn·öka",
-            KST.UnizaSchedule.Api.Enums.LessonType.Laboratory or KST.UnizaSchedule.Api.Enums.LessonType.Excercise => "CviËenie",
+            KST.UnizaSchedule.Api.Enums.LessonType.Lecture => "Predn√°≈°ka",
+            KST.UnizaSchedule.Api.Enums.LessonType.Laboratory or KST.UnizaSchedule.Api.Enums.LessonType.Excercise => "Cviƒçenie",
             KST.UnizaSchedule.Api.Enums.LessonType.Blocked => "Blok",
             _ => ""
         };

@@ -89,8 +89,8 @@
       "url": "_framework\/RBush.048ali807d.wasm.br"
     },
     {
-      "hash": "sha256-cQeJpsGF8ZLYi9ktzfjSqGX7pL6G4Tep+tH3ANIs2oU=",
-      "url": "_framework\/RozvrhUniza.owrxfn7tc4.wasm.br"
+      "hash": "sha256-i4ZbSHpHkNos39vSUhQpnHTc\/4sZ58aNyEr39W4Eo8s=",
+      "url": "_framework\/RozvrhUniza.6isf2phksp.wasm.br"
     },
     {
       "hash": "sha256-CGbH3QnTkCC6\/HkEpeYYqxfcVWn5HEFnAeaMQ8B\/20g=",
@@ -293,15 +293,15 @@
       "url": "_framework\/System.Xml.Linq.fnt4rzi185.wasm.br"
     },
     {
-      "hash": "sha256-970HnuESa868CK4U71oo2ZF\/04rhnNGzdXyK6dZZN1w=",
-      "url": "_framework\/UnizaScheduleApi.73dqajsjza.wasm.br"
+      "hash": "sha256-Xr3\/CQLYKBG7Td2QG8hF07aYyh+bOE5+FzOAX68kyas=",
+      "url": "_framework\/UnizaScheduleApi.mf9evi7h8x.wasm.br"
     },
     {
-      "hash": "sha256-oFWTQpASh+9JZJA3JKNEHS56Q9uQrgdrzMnCo\/MDP1g=",
-      "url": "_framework\/UnizaScheduleTable.gde1dx6bbk.wasm.br"
+      "hash": "sha256-ELK2mlpiqF4sIJJyoeLvypmX7Re5PnF14cVHCe+AB7c=",
+      "url": "_framework\/UnizaScheduleTable.tefj96djis.wasm.br"
     },
     {
-      "hash": "sha256-Tq78RQ7FXZryJWQ1ecB4qjaE3jO1IzsDYg1n7zwJJKk=",
+      "hash": "sha256-XfNAdW4LX6DUtVqSkEVXEqLA4vU0D+xrLWQkqQYs+PA=",
       "url": "_framework\/blazor.boot.json.br"
     },
     {
@@ -341,7 +341,7 @@
       "url": "_framework\/netstandard.0c6f9lzp5x.wasm.br"
     },
     {
-      "hash": "sha256-efkfn64ebU7aSFxZ070PO3gPWO5va\/kUj+s7UlyZWbw=",
+      "hash": "sha256-2RmJypat+qfxwZjruog7wgE6zxq7G79s0lk7r\/HMtAQ=",
       "url": "css\/app.css"
     },
     {
@@ -381,5 +381,5 @@
       "url": "brotliloader.min.js"
     }
   ],
-  "version": "B7ncevF0"
+  "version": "077aK1Cq"
 };

@@ -38,7 +38,7 @@
 
 @if (_sheduleData != null)
 {
-    <ScheduleView Data="@this._sheduleData"/>
+    <ScheduleView Data="@this._sheduleData" />
 }
 
 @if (_hasError)
@@ -129,11 +129,11 @@
         try
         {
             this._sheduleData = (await ScheduleApi.GetUnizaScheduleContentAsync(new SubjectScheduleRequest(
-                UnizaFaculty.FRI, 
-                _studyForm, 
-                _subjectYear, 
-                _subject, 
-                _year, 
+                UnizaFaculty.FRI,
+                _studyForm,
+                _subjectYear,
+                _subject,
+                _year,
                 _semester)))
                 .MergeMultipleTeachers()
                 .ToTable()

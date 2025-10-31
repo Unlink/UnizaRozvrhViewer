@@ -1,0 +1,27 @@
+/* Scoped styles for IntersectionSearch */
+
+/* Ensure equal-size grid like export preview */
+.table.free-table {
+ table-layout: fixed;
+ width:100%;
+}
+
+.table.free-table td,
+.table.free-table th {
+ overflow: hidden;
+ text-overflow: ellipsis;
+}
+
+/* Make all data cells the same height by forcing two-row body with same heights */
+.table.free-table tbody tr {
+ height:44px; /* first row height */
+}
+.table.free-table tbody tr + tr {
+ height:0; /* the empty spacer row remains collapsed */
+}
+
+/* Optional: better look for free cells */
+.free-cell {
+ background-color: #e8f5e9;
+ color: #1b5e20;
+}

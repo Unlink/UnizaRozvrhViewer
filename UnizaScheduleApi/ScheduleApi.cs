@@ -43,13 +43,38 @@ namespace KST.UnizaSchedule.Api
 
             var response = await httpClient.GetAsync("https://corsproxy.io?url="+ HttpUtility.UrlEncode(unizaUrl), ct);
             response.EnsureSuccessStatusCode();
-            var responseObject = await JsonSerializer.DeserializeAsync<TeacherResponse[]>(await response.Content.ReadAsStreamAsync(), cancellationToken: ct);
+            var responseObject = await JsonSerializer.DeserializeAsync<SearchApiResponse[]>(await response.Content.ReadAsStreamAsync(), cancellationToken: ct);
             return responseObject.Select(x => new UnizaTeacher(
                 x.value.Replace("rozvrh2.php?sq=1&id=", ""),
                 x.label,
                 x.desc));
         }
 
-        private record TeacherResponse(string value, string label, string desc);
+        public static async Task<IEnumerable<String>> GetUnizaSchoolGroups(string query, CancellationToken ct)
+        {
+            var unizaUrl = "https://vzdelavanie.uniza.sk/vzdelavanie/rozvrh_search2.php?qs=2&q=" + HttpUtility.UrlEncode(query);
+            using var httpClient = new HttpClient();
+
+            var response = await httpClient.GetAsync("https://corsproxy.io?url=" + HttpUtility.UrlEncode(unizaUrl), ct);
+            response.EnsureSuccessStatusCode();
+            var responseObject = await JsonSerializer.DeserializeAsync<SearchApiResponse[]>(await response.Content.ReadAsStreamAsync(), cancellationToken: ct);
+            return responseObject.Select(x => x.label);
+        }
+
+        public static async Task<IEnumerable<UnizaRoom>> GetUnizaRooms(string query, CancellationToken ct)
+        {
+            var unizaUrl = "https://vzdelavanie.uniza.sk/vzdelavanie/rozvrh_search2.php?qs=3&q=" + HttpUtility.UrlEncode(query);
+            using var httpClient = new HttpClient();
+
+            var response = await httpClient.GetAsync("https://corsproxy.io?url=" + HttpUtility.UrlEncode(unizaUrl), ct);
+            response.EnsureSuccessStatusCode();
+            var responseObject = await JsonSerializer.DeserializeAsync<SearchApiResponse[]>(await response.Content.ReadAsStreamAsync(), cancellationToken: ct);
+            return responseObject.Select(x => new UnizaRoom(
+                x.value.Replace("rozvrh2.php?sq=3&id=", ""),
+                x.label,
+                x.desc));
+        }
+
+        private record SearchApiResponse(string value, string label, string desc);
     }
 }

@@ -1,0 +1,467 @@
+@page "/vyhladavanie-prienikov"
+
+@using KST.UnizaSchedule.Api
+@using KST.UnizaSchedule.Api.ScheduleRequests
+@using KST.UnizaSchedule.Table
+@inject ILogger<Home> Logger
+
+<PageTitle>Vyhæad·vanie prienikov</PageTitle>
+
+<h3>Vyhæad·vanie prienikov</h3>
+
+<form onsubmit="return false;">
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="mb-3">
+                <label class="form-label">VybranÌ uËitelia</label>
+                <ul class="list-group">
+                    @foreach (var t in _selectedTeachers)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>@t.Name</span>
+                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => RemoveTeacher(t)">X</button>
+                        </li>
+                    }
+                </ul>
+            </div>
+            <div class="mb-3 position-relative">
+                <label class="form-label">Pridaù uËiteæa</label>
+                <input type="text" class="form-control" value="@_teacherQuery" @oninput="TeacherInputChanged" @ref="_teacherInputRef">
+                @if (_teacherSuggestions.Any())
+                {
+                    <ul class="dropdown-menu d-block">
+                        @foreach (var s in _teacherSuggestions)
+                        {
+                            <li @onclick="() => AddTeacher(s)"><a class="dropdown-item">@s.Name</a></li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="mb-3">
+                <label class="form-label">VybranÈ ötudijnÈ skupiny</label>
+                <ul class="list-group">
+                    @foreach (var g in _selectedGroups)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>@g</span>
+                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => RemoveGroup(g)">X</button>
+                        </li>
+                    }
+                </ul>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Pridaù ötudijn˙ skupinu</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" @bind-value="_groupQuery" @bind-value:event="oninput" @ref="_groupInputRef">
+                    <button type="button" class="btn btn-outline-primary" @onclick="AddGroupFromInput" disabled="@string.IsNullOrWhiteSpace(_groupQuery)">Pridaù</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="mb-3">
+                <label class="form-label">VybranÈ uËebne</label>
+                <ul class="list-group">
+                    @foreach (var r in _selectedRooms)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>@r.Name</span>
+                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => RemoveRoom(r)">X</button>
+                        </li>
+                    }
+                </ul>
+            </div>
+            <div class="mb-3 position-relative">
+                <label class="form-label">Pridaù uËebÚu</label>
+                <input type="text" class="form-control" value="@_roomQuery" @oninput="RoomInputChanged" @ref="_roomInputRef">
+                @if (_roomSuggestions.Any())
+                {
+                    <ul class="dropdown-menu d-block">
+                        @foreach (var s in _roomSuggestions)
+                        {
+                            <li @onclick="() => AddRoom(s)"><a class="dropdown-item">@s.Name</a></li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-3 d-flex gap-3 align-items-center flex-wrap">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="ignoreTeacherBlocks" @bind="_ignoreTeacherBlocks" />
+            <label class="form-check-label" for="ignoreTeacherBlocks">Ignorovaù bloky uËiteæov</label>
+        </div>
+        <button type="button" class="btn btn-primary" @onclick="SearchIntersections" disabled="@_searching">
+            @if (_searching)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            }
+            Vyhæadaù prieniky
+        </button>
+        @if (!string.IsNullOrWhiteSpace(_searchError))
+        {
+            <span class="text-danger">@_searchError</span>
+        }
+    </div>
+</form>
+
+@if (_freeMap is not null)
+{
+    <div class="mt-4">
+        <h5>VoænÈ bloky</h5>
+        <div class="table-responsive">
+            @{
+                var totalHalfCols = (ScheduleTable.LastBlockHour - ScheduleTable.FirstBlockHour + 1) * 2;
+            }
+            <table class="table table-bordered table-sm text-center align-middle free-table">
+                <colgroup>
+                    <col style="width:120px" />
+                    @for (var i = 0; i < totalHalfCols; i++)
+                    {
+                        <col />
+                    }
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th></th>
+                        @for (int h = ScheduleTable.FirstBlockHour; h <= ScheduleTable.LastBlockHour; h++)
+                        {
+                            <th colspan="2">@h:00</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var day in new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday })
+                    {
+                        var spans = _freeMap.TryGetValue(day, out var list) ? list.OrderBy(s => s.StartHalfIndex).ToList() : new List<FreeSpan>();
+                        int half = 0;
+                        int totalHalf = (ScheduleTable.LastBlockHour - ScheduleTable.FirstBlockHour + 1) * 2;
+                        <tr>
+                            <th rowspan="2" class="align-middle" style="width:120px">@DaySk(day)</th>
+                            @while (half < totalHalf)
+                            {
+                                var span = spans.FirstOrDefault(s => s.StartHalfIndex == half);
+                                if (span is not null)
+                                {
+                                    var colspan = span.DurationHalfSlots;
+                                    <td class="free-cell" colspan="@colspan" rowspan="2" style="background-color:#e8f5e9; color:#1b5e20; white-space: pre-line;">
+                                        VoænÈ
+                                        @if (span.FreeRooms?.Any() == true)
+                                        {
+                                            <br />
+                                            <small>Miestnosti: @string.Join(", ", span.FreeRooms)</small>
+                                        }
+                                    </td>
+                                    half += colspan;
+                                }
+                                else
+                                {
+                                    <td rowspan="2"></td>
+                                    half++;
+                                }
+                            }
+                        </tr>
+                        <tr></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<UnizaTeacher> _selectedTeachers = new();
+    private string _teacherQuery = string.Empty;
+    private List<UnizaTeacher> _teacherSuggestions = new();
+    private CancellationTokenSource? _teacherCts;
+    private ElementReference _teacherInputRef;
+
+    private List<string> _selectedGroups = new();
+    private string _groupQuery = string.Empty;
+    private ElementReference _groupInputRef;
+
+    private List<UnizaRoom> _selectedRooms = new();
+    private string _roomQuery = string.Empty;
+    private List<UnizaRoom> _roomSuggestions = new();
+    private CancellationTokenSource? _roomCts;
+    private ElementReference _roomInputRef;
+
+    private bool _searching = false;
+    private string? _searchError;
+    private bool _ignoreTeacherBlocks = false;
+
+    private record FreeSpan(DayOfWeek Day, int StartHalfIndex, int DurationHalfSlots, List<string>? FreeRooms);
+    private Dictionary<DayOfWeek, List<FreeSpan>>? _freeMap;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await _teacherInputRef.FocusAsync();
+        }
+    }
+
+    private async Task TeacherInputChanged(ChangeEventArgs arg)
+    {
+        var text = arg.Value?.ToString();
+        _teacherQuery = text ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            var cts = new CancellationTokenSource();
+            _teacherCts?.Cancel();
+            _teacherCts = cts;
+            try
+            {
+                var result = await ScheduleApi.GetUnizaTeachers(_teacherQuery, cts.Token);
+                _teacherSuggestions = result.ToList();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Nepodarilo sa naËÌtaù uËiteæov");
+            }
+            StateHasChanged();
+        }
+        else
+        {
+            _teacherSuggestions.Clear();
+        }
+    }
+
+    private void AddTeacher(UnizaTeacher teacher)
+    {
+        if (_selectedTeachers.All(t => t.Id != teacher.Id))
+        {
+            _selectedTeachers.Add(teacher);
+        }
+        _teacherQuery = string.Empty;
+        _teacherSuggestions.Clear();
+    }
+
+    private void RemoveTeacher(UnizaTeacher teacher)
+    {
+        _selectedTeachers.RemoveAll(t => t.Id == teacher.Id);
+    }
+
+    private void AddGroupFromInput()
+    {
+        var group = _groupQuery?.Trim();
+        if (!string.IsNullOrWhiteSpace(group) && !_selectedGroups.Contains(group))
+        {
+            _selectedGroups.Add(group);
+        }
+        _groupQuery = string.Empty;
+    }
+
+    private void RemoveGroup(string group)
+    {
+        _selectedGroups.Remove(group);
+    }
+
+    private async Task RoomInputChanged(ChangeEventArgs arg)
+    {
+        var text = arg.Value?.ToString();
+        _roomQuery = text ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            var cts = new CancellationTokenSource();
+            _roomCts?.Cancel();
+            _roomCts = cts;
+            try
+            {
+                var result = await ScheduleApi.GetUnizaRooms(_roomQuery, cts.Token);
+                _roomSuggestions = result.ToList();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Nepodarilo sa naËÌtaù uËebne");
+            }
+            StateHasChanged();
+        }
+        else
+        {
+            _roomSuggestions.Clear();
+        }
+    }
+
+    private void AddRoom(UnizaRoom room)
+    {
+        if (_selectedRooms.All(r => r.Id != room.Id))
+        {
+            _selectedRooms.Add(room);
+        }
+        _roomQuery = string.Empty;
+        _roomSuggestions.Clear();
+    }
+
+    private void RemoveRoom(UnizaRoom room)
+    {
+        _selectedRooms.RemoveAll(r => r.Id == room.Id);
+    }
+
+    private async Task SearchIntersections()
+    {
+        _searchError = null;
+        _freeMap = null;
+        _searching = true;
+        StateHasChanged();
+        try
+        {
+            // Load schedules separately for teachers and groups
+            var teacherTasks = new List<Task<IEnumerable<ScheduleContent>>>();
+            foreach (var t in _selectedTeachers)
+            {
+                teacherTasks.Add(ScheduleApi.GetUnizaScheduleContentAsync(new TeacherScheduleRequest(t.Id)));
+            }
+            var groupTasks = new List<Task<IEnumerable<ScheduleContent>>>();
+            foreach (var g in _selectedGroups)
+            {
+                groupTasks.Add(ScheduleApi.GetUnizaScheduleContentAsync(new GroupScheduleRequest(g)));
+            }
+            var teacherResults = await Task.WhenAll(teacherTasks.DefaultIfEmpty(Task.FromResult<IEnumerable<ScheduleContent>>(Array.Empty<ScheduleContent>())));
+            var groupResults = await Task.WhenAll(groupTasks.DefaultIfEmpty(Task.FromResult<IEnumerable<ScheduleContent>>(Array.Empty<ScheduleContent>())));
+            var teacherSchedules = teacherResults.SelectMany(r => r);
+            if (_ignoreTeacherBlocks)
+            {
+                teacherSchedules = teacherSchedules.Where(sc => sc.LessonType != KST.UnizaSchedule.Api.Enums.LessonType.Blocked);
+            }
+            var groupSchedules = groupResults.SelectMany(r => r);
+            var peopleSchedules = teacherSchedules.Concat(groupSchedules).ToList();
+
+            // Build occupancy for teachers+groups (union). If none selected, occupancy is all false (everything free)
+            var peopleOcc = CreateEmptyOccMap();
+            foreach (var sc in peopleSchedules)
+            {
+                MarkOccupied(peopleOcc, sc);
+            }
+
+            // Build occupancy per selected room
+            var roomOccMaps = new Dictionary<string, Dictionary<DayOfWeek, bool[]>>(); // key: roomId
+            if (_selectedRooms.Any())
+            {
+                var roomTasks = new List<(string id, string name, Task<IEnumerable<ScheduleContent>> task)>();
+                foreach (var room in _selectedRooms)
+                {
+                    if (int.TryParse(room.Id, out var roomId))
+                    {
+                        roomTasks.Add((room.Id, room.Name, ScheduleApi.GetUnizaScheduleContentAsync(new RoomScheduleRequest(roomId))));
+                    }
+                }
+                var taskList = roomTasks.ToList();
+                await Task.WhenAll(taskList.Select(t => t.task));
+                foreach (var (id, _, task) in taskList)
+                {
+                    var map = CreateEmptyOccMap();
+                    foreach (var sc in task.Result)
+                    {
+                        MarkOccupied(map, sc);
+                    }
+                    roomOccMaps[id] = map;
+                }
+            }
+
+            // Compute free spans
+            var freeMap = new Dictionary<DayOfWeek, List<FreeSpan>>();
+            var days = new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday };
+            int totalHalf = (ScheduleTable.LastBlockHour - ScheduleTable.FirstBlockHour + 1) * 2;
+
+            foreach (var day in days)
+            {
+                var occ = peopleOcc[day];
+                int i = 0;
+                while (i < totalHalf)
+                {
+                    // find start of free area
+                    while (i < totalHalf && occ[i]) i++;
+                    if (i >= totalHalf) break;
+                    int start = i;
+                    while (i < totalHalf && !occ[i]) i++;
+                    int dur = i - start;
+                    if (dur <= 0) continue;
+
+                    List<string>? freeRooms = null;
+                    if (_selectedRooms.Any())
+                    {
+                        // rooms OR: at least one room must be free for the entire span
+                        var candidateRooms = new List<string>();
+                        foreach (var room in _selectedRooms)
+                        {
+                            if (!roomOccMaps.TryGetValue(room.Id, out var rmap)) continue;
+                            var rocc = rmap[day];
+                            bool roomFree = true;
+                            for (int h = start; h < start + dur; h++)
+                            {
+                                if (rocc[h]) { roomFree = false; break; }
+                            }
+                            if (roomFree) candidateRooms.Add(room.Name);
+                        }
+                        if (candidateRooms.Count == 0)
+                        {
+                            continue; // no room free in this span -> skip
+                        }
+                        freeRooms = candidateRooms;
+                    }
+
+                    // Add span
+                    if (!freeMap.TryGetValue(day, out var list))
+                    {
+                        list = new List<FreeSpan>();
+                        freeMap[day] = list;
+                    }
+                    list.Add(new FreeSpan(day, start, dur, freeRooms));
+                }
+            }
+
+            _freeMap = freeMap;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Chyba pri vyhæad·vanÌ prienikov");
+            _searchError = "Chyba pri vyhæad·vanÌ prienikov";
+        }
+        finally
+        {
+            _searching = false;
+        }
+    }
+
+    private static Dictionary<DayOfWeek, bool[]> CreateEmptyOccMap()
+    {
+        var map = new Dictionary<DayOfWeek, bool[]>();
+        int totalHalf = (ScheduleTable.LastBlockHour - ScheduleTable.FirstBlockHour + 1) * 2;
+        map[DayOfWeek.Monday] = new bool[totalHalf];
+        map[DayOfWeek.Tuesday] = new bool[totalHalf];
+        map[DayOfWeek.Wednesday] = new bool[totalHalf];
+        map[DayOfWeek.Thursday] = new bool[totalHalf];
+        map[DayOfWeek.Friday] = new bool[totalHalf];
+        return map;
+    }
+
+    private static void MarkOccupied(Dictionary<DayOfWeek, bool[]> map, ScheduleContent sc)
+    {
+        // Only consider Mon-Fri
+        if (sc.Day < DayOfWeek.Monday || sc.Day > DayOfWeek.Friday) return;
+        int startHour = ScheduleTable.FirstBlockHour + (sc.BlockNumber - 1);
+        int startHalf = (startHour - ScheduleTable.FirstBlockHour) * 2; //2 half-slots per hour
+        int dur = 2; //1 hour =2 half-slots
+        var arr = map[sc.Day];
+        int total = arr.Length;
+        int s = Math.Clamp(startHalf, 0, total);
+        int e = Math.Clamp(startHalf + dur, 0, total);
+        for (int i = s; i < e; i++) arr[i] = true;
+    }
+
+    private static string DaySk(DayOfWeek day)
+        => day switch
+        {
+            DayOfWeek.Monday => "Pondelok",
+            DayOfWeek.Tuesday => "Utorok",
+            DayOfWeek.Wednesday => "Streda",
+            DayOfWeek.Thursday => "ätvrtok",
+            DayOfWeek.Friday => "Piatok",
+            _ => day.ToString()
+        };
+}

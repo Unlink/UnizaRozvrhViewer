@@ -52,7 +52,10 @@
                     <ul class="list-group">
                         @foreach (var g in _teacherGroups)
                         {
-                            <li class="list-group-item list-group-item-action" role="button" @onclick="() => LoadGroup(g)">@g.Name (@g.Teachers.Count)</li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <button type="button" class="btn btn-link text-start text-decoration-none flex-grow-1 p-0" @onclick="() => LoadGroup(g)">@g.Name (@g.Teachers.Count)</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger ms-2" title="Zmazať skupinu" @onclick:stopPropagation="true" @onclick="() => DeleteGroup(g)">X</button>
+                            </li>
                         }
                     </ul>
                 }
@@ -238,6 +241,13 @@
         _name = string.Empty;
         _suggestions.Clear();
         await _elRef.FocusAsync();
+        StateHasChanged();
+    }
+
+    private async Task DeleteGroup(TeacherGroup group)
+    {
+        _teacherGroups.RemoveAll(g => string.Equals(g.Name, group.Name, StringComparison.OrdinalIgnoreCase));
+        await SaveGroupsToLocalStorage();
         StateHasChanged();
     }
 

@@ -3,6 +3,7 @@
 @using KST.UnizaSchedule.Api.ScheduleRequests
 @using KST.UnizaSchedule.Table
 @using ClosedXML.Excel
+@using Microsoft.AspNetCore.Components.Web
 @inject ILogger<Home> Logger
 @inject IJSRuntime JS
 
@@ -25,7 +26,7 @@
 </div>
 
 <div class="form-check mb-3">
-    <input class="form-check-input" type="checkbox" id="includeBlocks" @bind="_includeBlocks" />
+    <input class="form-check-input" type="checkbox" id="includeBlocks" @bind="IncludeBlocks" />
     <label class="form-check-label" for="includeBlocks">Zahrnúť bloky</label>
 </div>
 
@@ -36,9 +37,10 @@
         <table class="table table-sm align-middle">
             <thead>
                 <tr>
-                    <th style="width: 55%">Oficiálny názov</th>
-                    <th style="width: 35%">Moja skratka</th>
-                    <th style="width: 10%"></th>
+                    <th style="width:55%">Oficiálny názov</th>
+                    <th style="width:25%">Moja skratka</th>
+                    <th style="width:10%">Farba</th>
+                    <th style="width:10%"></th>
                 </tr>
             </thead>
             <tbody>
@@ -47,7 +49,10 @@
                     <tr>
                         <td>@item.Name</td>
                         <td>
-                            <input class="form-control form-control-sm" @bind-value="item.Alias" @bind-value:event="oninput" />
+                            <input type="text" class="form-control form-control-sm" @bind-value="item.Alias" @bind-value:event="oninput" />
+                        </td>
+                        <td>
+                            <input type="color" class="form-control form-control-sm" style="height:2rem;padding:0;" @bind-value="item.Color" @bind-value:event="oninput" />
                         </td>
                         <td>
                             <button class="btn btn-outline-secondary btn-sm" title="Vymazať skratku" @onclick="() => { item.Alias = string.Empty; }">X</button>
@@ -57,13 +62,245 @@
             </tbody>
         </table>
     </div>
-    <button class="btn btn-outline-primary btn-sm" @onclick="SaveSubjectAliasesToLocalStorage">Uložiť názvy</button>
+    <button class="btn btn-outline-primary btn-sm" @onclick="SaveSubjectAliasesToLocalStorage">Uložiť názvy a farby</button>
 }
 
 @if (_selectedTeacher is not null)
 {
     <div class="alert alert-info mt-3">Vybraný učiteľ: <strong>@_selectedTeacher.Name</strong></div>
     <button class="btn btn-success" @onclick="ExportExcel">Exportovať do Excelu</button>
+}
+
+@if (_selectedTeacher is not null)
+{
+    <div class="mt-4">
+        <h5>Moje bloky</h5>
+        <div class="row g-2 align-items-end">
+            <div class="col-12 col-md-3">
+                <button class="btn btn-outline-secondary" @onclick="GenerateLunchBlocks">Automaticky vygenerovať bloky na obed</button>
+            </div>
+        </div>
+        @if (_customBlocks.Any())
+        {
+            <div class="mt-2">
+                <ul class="list-group">
+                    @foreach (var cb in _customBlocks.OrderBy(c => c.Day).ThenBy(c => c.StartHalfIndex))
+                    {
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>
+                                <strong>@DaySk(cb.Day)</strong> @HalfIndexToTime(cb.StartHalfIndex) - @HalfIndexToTime(cb.StartHalfIndex + cb.DurationHalfSlots), @((cb.DurationHalfSlots / 2.0).ToString("0.0"))h: @cb.Text
+                                @if (cb.Vertical)
+                                {
+                                    <span class="badge bg-secondary ms-2">V</span>
+                                    ;
+                                }
+                            </span>
+                            <button class="btn btn-sm btn-outline-danger" title="Odstrániť" @onclick="() => RemoveCustomBlock(cb)">X</button>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+    </div>
+}
+
+@if (_previewMap is not null)
+{
+    <div class="mt-3">
+        <h5>Náhľad rozvrhu</h5>
+        <div class="table-responsive">
+            @{
+                var totalHalfCols = (ScheduleTable.LastBlockHour - ScheduleTable.FirstBlockHour + 1) * 2;
+            }
+            <table class="table table-bordered table-sm text-center align-middle preview-table">
+                <colgroup>
+                    <col style="width:120px" />
+                    @for (var i = 0; i < totalHalfCols; i++)
+                    {
+                        <col />
+                    }
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th></th>
+                        @for (int h = ScheduleTable.FirstBlockHour; h <= ScheduleTable.LastBlockHour; h++)
+                        {
+                            <th colspan="2">@h:00</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var day in new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday })
+                    {
+                        var dayName = DaySk(day);
+                        var spans = _previewMap.TryGetValue(day, out var list) ? list.OrderBy(s => s.StartHalfIndex).ToList() : new List<PreviewSpan>();
+                        int half = 0;
+                        int totalHalf = (ScheduleTable.LastBlockHour - ScheduleTable.FirstBlockHour + 1) * 2;
+                        <tr>
+                            <th rowspan="2" class="align-middle" style="width:120px">@dayName</th>
+                            @while (half < totalHalf)
+                            {
+                                var span = spans.Where(s => s.StartHalfIndex == half).OrderByDescending(s => s.IsCustom ? 1 : 0).FirstOrDefault();
+                                if (span is not null)
+                                {
+                                    var colspan = span.DurationHalfSlots;
+                                    var bg = span.IsCustom
+                                    ? GetFillHexForKind(span.CustomKind ?? UserBlockKind.Blocked)
+                                    : GetSubjectBasedFill(span.CourseName ?? span.SubjectShortcut, span.LessonType);
+                                    var fg = GetIdealTextColor(bg);
+                                    var startHalfLocal = half;
+                                    <td class="clickable-cell" colspan="@colspan" rowspan="2" style="background-color:@bg; color:@fg; white-space: pre-line;"
+                                        @onclick="() => OnGridCellClick(day, startHalfLocal, span.IsCustom, colspan)"
+                                        @oncontextmenu:preventDefault @oncontextmenu:stopPropagation
+                                        @oncontextmenu="(e) => OnCellContextMenu(e, day, startHalfLocal, span.IsCustom, colspan, span.LessonType, span.CourseName, span.SubjectShortcut, span.RoomName)">
+                                        @if (span.IsCustom)
+                                        {
+                                            @if (span.Vertical)
+                                            {
+                                                <div class="vertical-text">@span.CustomText</div>
+                                            }
+                                            else
+                                            {
+                                                @span.CustomText
+                                            }
+                                        }
+                                        else
+                                        {
+                                            @LessonTypeSk(span.LessonType)
+                                            @if (!string.IsNullOrWhiteSpace(span.CourseName))
+                                            {
+                                                var subj = span.CourseName ?? span.SubjectShortcut;
+                                                if (!string.IsNullOrWhiteSpace(span.CourseName) && _subjectAliases.TryGetValue(span.CourseName, out var alias) && !string.IsNullOrWhiteSpace(alias))
+                                                {
+                                                    subj = alias;
+                                                }
+                                                if (!string.IsNullOrWhiteSpace(subj))
+                                                {
+                                                    <br />
+                                                    @subj
+                                                }
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(span.RoomName))
+                                            {
+                                                <br />
+                                                @span.RoomName
+                                            }
+                                        }
+                                    </td>
+                                    half += colspan;
+                                }
+                                else
+                                {
+                                    var startHalfLocal = half;
+                                    <td class="clickable-cell" rowspan="2" @onclick="() => OnGridCellClick(day, startHalfLocal, false, 1)"></td>
+                                    half++;
+                                }
+                            }
+                        </tr>
+                        <tr></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_editOpen)
+{
+    <div class="modal d-block" tabindex="0" style="background: rgba(0,0,0,.5);" @onclick="OnBackdropClick" @onkeydown="OnModalKeyDown">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content" @onclick:stopPropagation>
+                <div class="modal-header">
+                    <h5 class="modal-title">@( _editTarget is null ? "Pridať blok" : "Upraviť blok" )</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="CancelEdit"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrWhiteSpace(_editValidationError))
+                    {
+                        <div class="alert alert-danger py-2">@_editValidationError</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_editWarning))
+                    {
+                        <div class="alert alert-warning py-2">@_editWarning</div>
+                    }
+                    <div class="row g-2 align-items-end">
+                        <div class="col-12 col-md-2">
+                            <label class="form-label">Deň</label>
+                            <select class="form-select" @bind="_editDay" @bind:after="OnEditAfterChange">
+                                <option value="@DayOfWeek.Monday">Pondelok</option>
+                                <option value="@DayOfWeek.Tuesday">Utorok</option>
+                                <option value="@DayOfWeek.Wednesday">Streda</option>
+                                <option value="@DayOfWeek.Thursday">Štvrtok</option>
+                                <option value="@DayOfWeek.Friday">Piatok</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label">Začiatok</label>
+                            <input type="time" class="form-control" min="07:00" max="19:00" step="1800" @bind-value="_editStart" @bind-value:after="OnEditAfterChange" />
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label">Trvanie (h)</label>
+                            <select class="form-select" @bind="_editDurationHalfSlots" @bind:after="OnEditAfterChange">
+                                @foreach (var opt in _durationOptionsHalfSlots)
+                                {
+                                    <option value="@opt">@((opt / 2.0).ToString("0.0"))</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label">Text bloku</label>
+                            <input type="text" class="form-control" @bind-value="_editText" @bind-value:event="oninput" />
+                        </div>
+                        <div class="col-12 col-md-2">
+                            <label class="form-label">Typ</label>
+                            <select class="form-select" @bind="_editKind">
+                                <option value="@UserBlockKind.Lecture">Prednáška</option>
+                                <option value="@UserBlockKind.Excercise">Cvičenie</option>
+                                <option value="@UserBlockKind.Laboratory">Laboratórium</option>
+                                <option value="@UserBlockKind.Blocked">Blok</option>
+                                <option value="@UserBlockKind.Meeting">Porady</option>
+                                <option value="@UserBlockKind.Consultation">Konzultácie</option>
+                                <option value="@UserBlockKind.Lunch">Obed</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="editVertical" @bind="_editVertical" @bind:after="OnEditAfterChange" />
+                                <label class="form-check-label" for="editVertical">Vertikálny text</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    @if (_editTarget is not null)
+                    {
+                        <button class="btn btn-danger" @onclick="DeleteEdit">Zmazať</button>
+                    }
+                    <button class="btn btn-secondary" @onclick="CancelEdit">Zrušiť</button>
+                    <button class="btn btn-primary" @onclick="SaveEdit">Uložiť</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_ctxOpen && _ctxTarget is not null)
+{
+    <div style="position:fixed; inset:0; z-index:1040;" @onclick="CloseContextMenu"></div>
+    <div class="dropdown-menu show" style="@($"position:fixed; z-index:1050; left:{_ctxX}px; top:{_ctxY}px; display:block;")">
+        @if (_ctxTarget.IsCustom)
+        {
+            <button class="dropdown-item" @onclick="RemoveCustomFromTarget">Odstrániť vlastný blok</button>
+            <button class="dropdown-item" @onclick="ToggleVerticalFromTarget">@(GetCtxVerticalText())</button>
+        }
+        else
+        {
+            <button class="dropdown-item text-danger" @onclick="RemoveScheduleFromTarget">Odstrániť blok z rozvrhu</button>
+            <button class="dropdown-item" @onclick="ToggleVerticalFromTarget">@(GetCtxVerticalText())</button>
+        }
+        <div class="dropdown-divider"></div>
+        <button class="dropdown-item" @onclick="CloseContextMenu">Zrušiť</button>
+    </div>
 }
 
 @if (_error is not null)
@@ -73,7 +310,18 @@
 
 @code {
     private record Teacher(string PersonalNumber, string Name);
-    private class SubjectAliasItem { public string Name { get; set; } = string.Empty; public string Alias { get; set; } = string.Empty; }
+    private class SubjectAliasItem { public string Name { get; set; } = string.Empty; public string Alias { get; set; } = string.Empty; public string Color { get; set; } = "#cccccc"; }
+
+    private enum UserBlockKind
+    {
+        Lecture,
+        Excercise,
+        Laboratory,
+        Blocked,
+        Meeting,
+        Consultation,
+        Lunch
+    }
 
     private string _search = string.Empty;
     private List<Teacher> _suggestions = new();
@@ -81,14 +329,64 @@
     private string? _error;
     private CancellationTokenSource? _cts;
     private bool _includeBlocks = true;
+    private bool IncludeBlocks { get => _includeBlocks; set { if (_includeBlocks != value) { _includeBlocks = value; _ = BuildPreviewSchedule(); } } }
+
+    // preview state
+    private Dictionary<DayOfWeek, List<PreviewSpan>>? _previewMap;
+    private Dictionary<DayOfWeek, bool[]>? _scheduleOcc;
+    private List<ScheduleContent> _currentSchedule = new();
+
+    // schedule vertical overrides
+    private List<ScheduleVertical> _scheduleVerticals = new();
+
+    // custom blocks state
+    private List<CustomBlock> _customBlocks = new();
+    private DayOfWeek _newBlockDay = DayOfWeek.Monday;
+    private TimeOnly? _newBlockStart = new(7, 0);
+    private int _newBlockDurationHalfSlots = 2; //1.0h by default
+    private string _newBlockText = string.Empty;
+    private bool _newBlockVertical = false;
+    private UserBlockKind _newBlockKind = UserBlockKind.Blocked;
+    private readonly int[] _durationOptionsHalfSlots = new[] { 1, 2, 3, 4, 5, 6, 8, 10, 12 }; //0.5 ..6.0h
+
+    // inline editor (modal) state
+    private bool _editOpen = false;
+    private DayOfWeek _editDay = DayOfWeek.Monday;
+    private TimeOnly? _editStart = new(7, 0);
+    private int _editDurationHalfSlots = 2;
+    private string _editText = string.Empty;
+    private bool _editVertical = false;
+    private UserBlockKind _editKind = UserBlockKind.Blocked;
+    private CustomBlock? _editTarget;
+    private string? _editValidationError;
+    private string? _editWarning;
+
+    // context menu state
+    private bool _ctxOpen = false;
+    private double _ctxX;
+    private double _ctxY;
+    private ContextTarget? _ctxTarget;
 
     // editor state
     private List<SubjectAliasItem> _subjectEditor = new();
     private Dictionary<string, string> _subjectAliases = new();
+    private Dictionary<string, string> _subjectColors = new(StringComparer.Ordinal);
 
     private string AliasesStorageKey => _selectedTeacher is null
         ? "subject_aliases"
         : $"subject_aliases_{_selectedTeacher.PersonalNumber}";
+
+    private string SubjectColorsStorageKey => _selectedTeacher is null
+        ? "subject_colors"
+        : $"subject_colors_{_selectedTeacher.PersonalNumber}";
+
+    private string CustomBlocksStorageKey => _selectedTeacher is null
+        ? "custom_blocks"
+        : $"custom_blocks_{_selectedTeacher.PersonalNumber}";
+
+    private string SchVerticalStorageKey => _selectedTeacher is null
+        ? "schedule_vertical"
+        : $"schedule_vertical_{_selectedTeacher.PersonalNumber}";
 
     private async Task OnSearchChanged(ChangeEventArgs e)
     {
@@ -99,6 +397,14 @@
             _suggestions.Clear();
             _selectedTeacher = null;
             _subjectEditor.Clear();
+            _previewMap = null;
+            _scheduleOcc = null;
+            _currentSchedule.Clear();
+            _customBlocks.Clear();
+            _scheduleVerticals.Clear();
+            _subjectAliases.Clear();
+            _subjectColors.Clear();
+            _editOpen = false;
             return;
         }
         var cts = new CancellationTokenSource();
@@ -124,17 +430,41 @@
         _selectedTeacher = t;
         _search = t.Name;
         _suggestions.Clear();
+        _editOpen = false;
         await BuildSubjectEditor();
+        await LoadCustomBlocksFromLocalStorage();
+        await LoadScheduleVerticalsFromLocalStorage();
+        await BuildPreviewSchedule();
     }
 
     private async Task BuildSubjectEditor()
     {
         _subjectEditor.Clear();
         _subjectAliases.Clear();
+        _subjectColors.Clear();
         if (_selectedTeacher is null) return;
         try
         {
             var schedule = await ScheduleApi.GetUnizaScheduleContentAsync(new TeacherScheduleRequest(_selectedTeacher.PersonalNumber));
+
+            // keep normalized schedule for preview (use selected teacher's name explicitly)
+            _currentSchedule = schedule
+                .Select(x => new ScheduleContent
+                {
+                    BlockNumber = x.BlockNumber,
+                    CourseName = x.CourseName,
+                    Day = x.Day,
+                    TeacherName = _selectedTeacher.Name,
+                    Group = x.Group,
+                    LessonType = x.LessonType,
+                    RoomName = x.RoomName,
+                    SubjectShortcut = x.SubjectShortcut
+                })
+                .OrderBy(x => x.Day)
+                .ThenBy(x => x.BlockNumber)
+                .Distinct()
+                .ToList();
+
             var names = schedule
                 .Select(s => s.CourseName)
                 .Where(n => !string.IsNullOrWhiteSpace(n))
@@ -143,15 +473,33 @@
                 .ToList();
 
             await LoadSubjectAliasesFromLocalStorage();
+            await LoadSubjectColorsFromLocalStorage();
+
+            // assign default colors if missing
+            var palette = new[] { "#A4C2F4", "#B6D7A8", "#FFE599", "#F4CCCC", "#D9D2E9" }; //5 defaults
+            int pi = 0;
+            foreach (var n in names)
+            {
+                if (string.IsNullOrWhiteSpace(n)) continue;
+                if (!_subjectColors.ContainsKey(n!))
+                {
+                    _subjectColors[n!] = palette[pi % palette.Length];
+                    pi++;
+                }
+            }
 
             foreach (var n in names)
             {
                 _subjectEditor.Add(new SubjectAliasItem
                 {
                     Name = n!,
-                    Alias = _subjectAliases.TryGetValue(n!, out var a) ? a : string.Empty
+                    Alias = _subjectAliases.TryGetValue(n!, out var a) ? a : string.Empty,
+                    Color = _subjectColors.TryGetValue(n!, out var c) ? c : "#cccccc"
                 });
             }
+
+            // persist any new color assignments
+            await SaveSubjectColorsToLocalStorage();
         }
         catch (Exception ex)
         {
@@ -159,15 +507,543 @@
         }
     }
 
+    private async Task BuildPreviewSchedule()
+    {
+        try
+        {
+            _previewMap = new Dictionary<DayOfWeek, List<PreviewSpan>>();
+            _scheduleOcc = new Dictionary<DayOfWeek, bool[]>();
+            if (_selectedTeacher is null) return;
+
+            // Ensure we have current schedule; if not, load it now
+            if (_currentSchedule.Count == 0)
+            {
+                var schedule = await ScheduleApi.GetUnizaScheduleContentAsync(new TeacherScheduleRequest(_selectedTeacher.PersonalNumber));
+                _currentSchedule = schedule
+                    .Select(x => new ScheduleContent
+                    {
+                        BlockNumber = x.BlockNumber,
+                        CourseName = x.CourseName,
+                        Day = x.Day,
+                        TeacherName = _selectedTeacher.Name,
+                        Group = x.Group,
+                        LessonType = x.LessonType,
+                        RoomName = x.RoomName,
+                        SubjectShortcut = x.SubjectShortcut
+                    })
+                    .OrderBy(x => x.Day)
+                    .ThenBy(x => x.BlockNumber)
+                    .Distinct()
+                    .ToList();
+            }
+
+            var filtered = _includeBlocks
+                ? _currentSchedule
+                : _currentSchedule.Where(s => s.LessonType != KST.UnizaSchedule.Api.Enums.LessonType.Blocked);
+
+            // half-hour occupancy by custom blocks and schedule
+            var totalHalf = (ScheduleTable.LastBlockHour - ScheduleTable.FirstBlockHour + 1) * 2;
+            var occupancy = new Dictionary<DayOfWeek, bool[]>();
+            foreach (var d in new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday })
+            {
+                occupancy[d] = new bool[totalHalf];
+                _scheduleOcc[d] = new bool[totalHalf];
+            }
+            foreach (var cb in _customBlocks)
+            {
+                if (!occupancy.TryGetValue(cb.Day, out var arr)) continue;
+                var s = Math.Clamp(cb.StartHalfIndex, 0, totalHalf);
+                var e = Math.Clamp(cb.StartHalfIndex + cb.DurationHalfSlots, 0, totalHalf);
+                for (int i = s; i < e; i++) arr[i] = true;
+            }
+
+            // build schedule spans, also fill schedule occupancy
+            var ordered = filtered
+                .OrderBy(s => s.Day)
+                .ThenBy(s => s.BlockNumber)
+                .ThenBy(s => s.CourseName)
+                .ToList();
+
+            int idx = 0;
+            while (idx < ordered.Count)
+            {
+                var cur = ordered[idx];
+                int count = 1;
+                int j = idx + 1;
+                while (j < ordered.Count)
+                {
+                    var nx = ordered[j];
+                    if (nx.Day == cur.Day &&
+                        nx.CourseName == cur.CourseName &&
+                        nx.RoomName == cur.RoomName &&
+                        nx.LessonType == cur.LessonType &&
+                        nx.SubjectShortcut == cur.SubjectShortcut &&
+                        nx.BlockNumber == cur.BlockNumber + (j - idx))
+                    {
+                        count++;
+                        j++;
+                    }
+                    else break;
+                }
+
+                var startHour = ScheduleTable.FirstBlockHour + cur.BlockNumber - 1;
+                var startHalf = (startHour - ScheduleTable.FirstBlockHour) * 2;
+                var durHalf = count * 2;
+
+                // mark schedule occupancy regardless of custom blocks
+                var occSch = _scheduleOcc[cur.Day];
+                for (int h = startHalf; h < startHalf + durHalf; h++) occSch[h] = true;
+
+                // split by occupancy of custom blocks for preview
+                var occ = occupancy[cur.Day];
+                int k = startHalf;
+                int end = startHalf + durHalf;
+                while (k < end)
+                {
+                    while (k < end && occ[k]) k++;
+                    if (k >= end) break;
+                    int segStart = k;
+                    while (k < end && !occ[k]) k++;
+                    int segDur = k - segStart;
+                    if (segDur > 0)
+                    {
+                        AddSpan(new PreviewSpan
+                        {
+                            Day = cur.Day,
+                            StartHalfIndex = segStart,
+                            DurationHalfSlots = segDur,
+                            LessonType = cur.LessonType,
+                            CourseName = cur.CourseName,
+                            SubjectShortcut = cur.SubjectShortcut,
+                            RoomName = cur.RoomName,
+                            IsCustom = false,
+                            Vertical = IsScheduleSpanVertical(cur.Day, segStart, segDur)
+                        });
+                    }
+                }
+
+                idx = j;
+            }
+
+            // add custom spans
+            foreach (var cb in _customBlocks)
+            {
+                AddSpan(new PreviewSpan
+                {
+                    Day = cb.Day,
+                    StartHalfIndex = cb.StartHalfIndex,
+                    DurationHalfSlots = cb.DurationHalfSlots,
+                    LessonType = KST.UnizaSchedule.Api.Enums.LessonType.Blocked,
+                    CustomText = cb.Text,
+                    IsCustom = true,
+                    Vertical = cb.Vertical,
+                    CustomKind = cb.Kind
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Nepodarilo sa pripraviť náhľad rozvrhu");
+        }
+    }
+
+    private bool IsScheduleSpanVertical(DayOfWeek day, int startHalf, int durationHalf)
+        => _scheduleVerticals.Any(v => v.Day == day && v.StartHalf == startHalf && v.DurationHalf == durationHalf);
+
+    private void AddSpan(PreviewSpan span)
+    {
+        if (_previewMap is null) return;
+        if (!_previewMap.TryGetValue(span.Day, out var list))
+        {
+            list = new List<PreviewSpan>();
+            _previewMap[span.Day] = list;
+        }
+        list.Add(span);
+    }
+
+    private async Task GenerateLunchBlocks()
+    {
+        if (_selectedTeacher is null) return;
+        // Ensure occupancy is up to date
+        await BuildPreviewSchedule();
+        int totalHalf = (ScheduleTable.LastBlockHour - ScheduleTable.FirstBlockHour + 1) * 2;
+        var days = new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday };
+        foreach (var day in days)
+        {
+            if (_scheduleOcc is null || !_scheduleOcc.TryGetValue(day, out var occ)) continue;
+            // Avoid duplicate lunch per day
+            if (_customBlocks.Any(c => c.Day == day && c.Kind == UserBlockKind.Lunch)) continue;
+            int h1130 = (11 - ScheduleTable.FirstBlockHour) * 2 + 1;
+            int h1200 = (12 - ScheduleTable.FirstBlockHour) * 2;
+            var candidates = new[] { h1130, h1200 };
+            foreach (var start in candidates)
+            {
+                if (start < 0 || start >= totalHalf) continue;
+                if (occ[start]) continue; // schedule occupied
+                if (!TryValidateCustom(day, start, 1, null, out _, out var overlapsSchedule)) continue;
+                if (overlapsSchedule) continue; // avoid schedule overlap as well
+                _customBlocks.Add(new CustomBlock
+                {
+                    Day = day,
+                    StartHalfIndex = start,
+                    DurationHalfSlots = 1,
+                    Text = "Obed",
+                    Kind = UserBlockKind.Lunch,
+                    Vertical = true
+                });
+                break;
+            }
+        }
+        await SaveCustomBlocksToLocalStorage();
+        await BuildPreviewSchedule();
+    }
+
+    private void OnGridCellClick(DayOfWeek day, int startHalf, bool isCustom, int durationHalf)
+    {
+        _editValidationError = null;
+        _editWarning = null;
+        if (isCustom)
+        {
+            var cb = _customBlocks.FirstOrDefault(c => c.Day == day && c.StartHalfIndex == startHalf);
+            if (cb is not null)
+            {
+                OpenEditorForCustom(cb);
+                ComputeEditWarning();
+                return;
+            }
+        }
+        OpenEditorForNew(day, startHalf, durationHalf);
+        ComputeEditWarning();
+    }
+
+    private void OpenEditorForCustom(CustomBlock cb)
+    {
+        _editTarget = cb;
+        _editOpen = true;
+        _editDay = cb.Day;
+        _editStart = new TimeOnly(ScheduleTable.FirstBlockHour + (cb.StartHalfIndex / 2), (cb.StartHalfIndex % 2) * 30);
+        _editDurationHalfSlots = cb.DurationHalfSlots;
+        _editText = cb.Text;
+        _editKind = cb.Kind;
+        _editVertical = cb.Vertical;
+    }
+
+    private void OpenEditorForNew(DayOfWeek day, int startHalf, int durationHalf)
+    {
+        _editTarget = null;
+        _editOpen = true;
+        _editDay = day;
+        _editStart = new TimeOnly(ScheduleTable.FirstBlockHour + (startHalf / 2), (startHalf % 2) * 30);
+        _editDurationHalfSlots = Math.Max(1, durationHalf);
+        _editText = string.Empty;
+        _editKind = UserBlockKind.Blocked;
+        _editVertical = false;
+    }
+
+    private void ComputeEditWarning()
+    {
+        if (_scheduleOcc is null || _editStart is null) { _editWarning = null; return; }
+        int h = _editStart.Value.Hour;
+        int m = _editStart.Value.Minute;
+        int start = (h - ScheduleTable.FirstBlockHour) * 2 + (m >= 30 ? 1 : 0);
+        int dur = Math.Max(1, _editDurationHalfSlots);
+        var occ = _scheduleOcc.TryGetValue(_editDay, out var arr) ? arr : null;
+        if (occ is null) { _editWarning = null; return; }
+        int total = (ScheduleTable.LastBlockHour - ScheduleTable.FirstBlockHour + 1) * 2;
+        int s = Math.Clamp(start, 0, total);
+        int e = Math.Clamp(start + dur, 0, total);
+        bool overlap = false;
+        for (int i = s; i < e; i++) if (occ[i]) { overlap = true; break; }
+        _editWarning = overlap ? "Pozor: blok sa prekrýva s existujúcim rozvrhom." : null;
+    }
+
+    private void OnEditAfterChange()
+    {
+        ComputeEditWarning();
+    }
+
+    private void OnBackdropClick()
+    {
+        CancelEdit();
+    }
+
+    private void OnModalKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") CancelEdit();
+    }
+
+    private bool TryValidateCustom(DayOfWeek day, int startHalf, int durationHalf, CustomBlock? ignore, out string? error, out bool overlapsSchedule)
+    {
+        error = null;
+        overlapsSchedule = false;
+        int totalHalf = (ScheduleTable.LastBlockHour - ScheduleTable.FirstBlockHour + 1) * 2;
+        if (durationHalf < 1) { error = "Trvanie musí byť aspoň0.5 hodiny."; return false; }
+        if (startHalf < 0 || startHalf >= totalHalf) { error = "Začiatok je mimo povolený rozsah."; return false; }
+        if (startHalf + durationHalf > totalHalf) { error = "Blok presahuje koniec dňa."; return false; }
+        // overlap with other custom blocks (same day)
+        foreach (var cb in _customBlocks)
+        {
+            if (ignore is not null && ReferenceEquals(cb, ignore)) continue;
+            if (cb.Day != day) continue;
+            int s1 = startHalf, e1 = startHalf + durationHalf;
+            int s2 = cb.StartHalfIndex, e2 = cb.StartHalfIndex + cb.DurationHalfSlots;
+            if (s1 < e2 && s2 < e1) { error = "Blok sa prekrýva s iným vlastným blokom."; return false; }
+        }
+        // schedule overlap (warning)
+        if (_scheduleOcc != null && _scheduleOcc.TryGetValue(day, out var arr))
+        {
+            for (int i = startHalf; i < startHalf + durationHalf; i++) if (arr[i]) { overlapsSchedule = true; break; }
+        }
+        return true;
+    }
+
+    private async Task SaveEdit()
+    {
+        _editValidationError = null;
+        _editWarning = null;
+        if (_editStart is null) return;
+        var h = _editStart.Value.Hour;
+        var m = _editStart.Value.Minute;
+        var halfIndex = (h - ScheduleTable.FirstBlockHour) * 2 + (m >= 30 ? 1 : 0);
+        if (!TryValidateCustom(_editDay, halfIndex, Math.Max(1, _editDurationHalfSlots), _editTarget, out var err, out var warn))
+        {
+            _editValidationError = err;
+            return;
+        }
+        _editWarning = warn ? "Pozor: blok sa prekrýva s existujúcim rozvrhom." : null;
+        if (_editTarget is null)
+        {
+            var cb = new CustomBlock
+            {
+                Day = _editDay,
+                StartHalfIndex = halfIndex,
+                DurationHalfSlots = Math.Max(1, _editDurationHalfSlots),
+                Text = _editText?.Trim() ?? string.Empty,
+                Kind = _editKind,
+                Vertical = _editVertical
+            };
+            _customBlocks.Add(cb);
+        }
+        else
+        {
+            _editTarget.Day = _editDay;
+            _editTarget.StartHalfIndex = halfIndex;
+            _editTarget.DurationHalfSlots = Math.Max(1, _editDurationHalfSlots);
+            _editTarget.Text = _editText?.Trim() ?? string.Empty;
+            _editTarget.Kind = _editKind;
+            _editTarget.Vertical = _editVertical;
+        }
+        await SaveCustomBlocksToLocalStorage();
+        await BuildPreviewSchedule();
+        _editOpen = false;
+    }
+
+    private async Task DeleteEdit()
+    {
+        if (_editTarget is null) { _editOpen = false; return; }
+        _customBlocks.Remove(_editTarget);
+        await SaveCustomBlocksToLocalStorage();
+        await BuildPreviewSchedule();
+        _editOpen = false;
+    }
+
+    private void CancelEdit()
+    {
+        _editOpen = false;
+    }
+
+    // Context menu helpers
+    private void OnCellContextMenu(MouseEventArgs e, DayOfWeek day, int startHalf, bool isCustom, int durationHalf,
+ KST.UnizaSchedule.Api.Enums.LessonType type, string? course, string? subj, string? room)
+    {
+        _ctxTarget = new ContextTarget
+        {
+            Day = day,
+            StartHalf = startHalf,
+            DurationHalf = durationHalf,
+            IsCustom = isCustom,
+            Type = type,
+            CourseName = course,
+            SubjectShortcut = subj,
+            RoomName = room
+        };
+        _ctxX = e.ClientX;
+        _ctxY = e.ClientY;
+        _ctxOpen = true;
+    }
+
+    private void CloseContextMenu()
+    {
+        _ctxOpen = false;
+        _ctxTarget = null;
+    }
+
+    private string GetCtxVerticalText()
+    {
+        if (_ctxTarget is null) return "Vertikálny text";
+        bool isVert = _ctxTarget.IsCustom
+        ? _customBlocks.Any(x => x.Day == _ctxTarget.Day && x.StartHalfIndex == _ctxTarget.StartHalf && x.DurationHalfSlots == _ctxTarget.DurationHalf && x.Vertical)
+        : _scheduleVerticals.Any(x => x.Day == _ctxTarget.Day && x.StartHalf == _ctxTarget.StartHalf && x.DurationHalf == _ctxTarget.DurationHalf);
+        return isVert ? "Vypnúť vertikálny text" : "Zapnúť vertikálny text";
+    }
+
+    private async Task ToggleVerticalFromTarget()
+    {
+        if (_ctxTarget is null) return;
+        if (_ctxTarget.IsCustom)
+        {
+            var cb = _customBlocks.FirstOrDefault(x => x.Day == _ctxTarget.Day && x.StartHalfIndex == _ctxTarget.StartHalf && x.DurationHalfSlots == _ctxTarget.DurationHalf);
+            if (cb is not null)
+            {
+                cb.Vertical = !cb.Vertical;
+                await SaveCustomBlocksToLocalStorage();
+            }
+        }
+        else
+        {
+            var existing = _scheduleVerticals.FirstOrDefault(x => x.Day == _ctxTarget.Day && x.StartHalf == _ctxTarget.StartHalf && x.DurationHalf == _ctxTarget.DurationHalf);
+            if (existing is null)
+                _scheduleVerticals.Add(new ScheduleVertical { Day = _ctxTarget.Day, StartHalf = _ctxTarget.StartHalf, DurationHalf = _ctxTarget.DurationHalf });
+            else
+                _scheduleVerticals.Remove(existing);
+            await SaveScheduleVerticalsToLocalStorage();
+        }
+        await BuildPreviewSchedule();
+        CloseContextMenu();
+    }
+
+    private async Task RemoveCustomFromTarget()
+    {
+        if (_ctxTarget is null) return;
+        var t = _ctxTarget;
+        var cb = _customBlocks.FirstOrDefault(x => x.Day == t.Day && x.StartHalfIndex == t.StartHalf && x.DurationHalfSlots == t.DurationHalf);
+        if (cb is not null)
+        {
+            _customBlocks.Remove(cb);
+            await SaveCustomBlocksToLocalStorage();
+            await BuildPreviewSchedule();
+        }
+        CloseContextMenu();
+    }
+
+    private async Task RemoveScheduleFromTarget()
+    {
+        if (_ctxTarget is null) return;
+        var t = _ctxTarget;
+        // compute affected block numbers
+        int startBlock = (t.StartHalf / 2) + 1;
+        int lastBlock = ((t.StartHalf + t.DurationHalf - 1) / 2) + 1;
+        bool Same(string? a, string? b) => string.Equals(a ?? string.Empty, b ?? string.Empty, StringComparison.Ordinal);
+
+        _currentSchedule = _currentSchedule
+        .Where(s => !(s.Day == t.Day && s.LessonType == t.Type && Same(s.CourseName, t.CourseName) && Same(s.SubjectShortcut, t.SubjectShortcut) && Same(s.RoomName, t.RoomName) && s.BlockNumber >= startBlock && s.BlockNumber <= lastBlock))
+        .ToList();
+
+        await BuildPreviewSchedule();
+        CloseContextMenu();
+    }
+
+    private async Task AddCustomBlock()
+    {
+        if (_selectedTeacher is null) return;
+        if (_newBlockStart is null) return;
+        var startHour = _newBlockStart.Value.Hour;
+        var startMin = _newBlockStart.Value.Minute;
+        var halfIndex = (startHour - ScheduleTable.FirstBlockHour) * 2 + (startMin >= 30 ? 1 : 0);
+        if (!TryValidateCustom(_newBlockDay, halfIndex, Math.Max(1, _newBlockDurationHalfSlots), null, out var err, out var warn))
+        {
+            _error = err;
+            return;
+        }
+        var cb = new CustomBlock
+        {
+            Day = _newBlockDay,
+            StartHalfIndex = halfIndex,
+            DurationHalfSlots = Math.Max(1, _newBlockDurationHalfSlots),
+            Text = _newBlockText?.Trim() ?? string.Empty,
+            Kind = _newBlockKind,
+            Vertical = _newBlockVertical
+        };
+        _customBlocks.Add(cb);
+        await SaveCustomBlocksToLocalStorage();
+        await BuildPreviewSchedule();
+        _newBlockText = string.Empty;
+        _newBlockVertical = false;
+        _newBlockKind = UserBlockKind.Blocked;
+    }
+
+    private async Task RemoveCustomBlock(CustomBlock cb)
+    {
+        _customBlocks.Remove(cb);
+        await SaveCustomBlocksToLocalStorage();
+        await BuildPreviewSchedule();
+    }
+
+    private async Task SaveCustomBlocksToLocalStorage()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(_customBlocks);
+        await JS.InvokeVoidAsync("localStorage.setItem", CustomBlocksStorageKey, json);
+    }
+
+    private async Task LoadCustomBlocksFromLocalStorage()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string>("localStorage.getItem", CustomBlocksStorageKey);
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<List<CustomBlock>>(json);
+                if (loaded is not null)
+                {
+                    _customBlocks = loaded;
+                }
+            }
+        }
+        catch { }
+    }
+
+    private async Task SaveScheduleVerticalsToLocalStorage()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(_scheduleVerticals);
+        await JS.InvokeVoidAsync("localStorage.setItem", SchVerticalStorageKey, json);
+    }
+
+    private async Task LoadScheduleVerticalsFromLocalStorage()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string>("localStorage.getItem", SchVerticalStorageKey);
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<List<ScheduleVertical>>(json);
+                if (loaded is not null)
+                {
+                    _scheduleVerticals = loaded;
+                }
+            }
+        }
+        catch { }
+    }
+
     private async Task SaveSubjectAliasesToLocalStorage()
     {
-        // build dictionary from editor
+        // build alias dictionary from editor
         _subjectAliases = _subjectEditor
-            .Where(i => !string.IsNullOrWhiteSpace(i.Name))
-            .ToDictionary(i => i.Name, i => i.Alias ?? string.Empty, StringComparer.Ordinal);
+        .Where(i => !string.IsNullOrWhiteSpace(i.Name))
+        .ToDictionary(i => i.Name, i => i.Alias ?? string.Empty, StringComparer.Ordinal);
+        // build color dictionary from editor
+        _subjectColors = _subjectEditor
+        .Where(i => !string.IsNullOrWhiteSpace(i.Name))
+        .ToDictionary(i => i.Name, i => NormalizeHex(i.Color), StringComparer.Ordinal);
+        var jsonAliases = System.Text.Json.JsonSerializer.Serialize(_subjectAliases);
+        await JS.InvokeVoidAsync("localStorage.setItem", AliasesStorageKey, jsonAliases);
+        await SaveSubjectColorsToLocalStorage();
+    }
 
-        var json = System.Text.Json.JsonSerializer.Serialize(_subjectAliases);
-        await JS.InvokeVoidAsync("localStorage.setItem", AliasesStorageKey, json);
+    private async Task SaveSubjectColorsToLocalStorage()
+    {
+        var jsonColors = System.Text.Json.JsonSerializer.Serialize(_subjectColors);
+        await JS.InvokeVoidAsync("localStorage.setItem", SubjectColorsStorageKey, jsonColors);
     }
 
     private async Task LoadSubjectAliasesFromLocalStorage()
@@ -187,15 +1063,41 @@
         catch { }
     }
 
+    private async Task LoadSubjectColorsFromLocalStorage()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string>("localStorage.getItem", SubjectColorsStorageKey);
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                if (loaded is not null)
+                {
+                    _subjectColors = new Dictionary<string, string>(loaded, StringComparer.Ordinal);
+                }
+            }
+        }
+        catch { }
+    }
+
+    private static string HalfIndexToTime(int halfIndex)
+    {
+        var totalMinutes = (ScheduleTable.FirstBlockHour * 60) + halfIndex * 30;
+        var h = totalMinutes / 60;
+        var m = totalMinutes % 60;
+        return $"{h:00}:{m:00}";
+    }
+
     private async Task ExportExcel()
     {
         if (_selectedTeacher is null) return;
         _error = null;
         try
         {
-            // ensure aliases are saved/loaded
+            // ensure aliases/colors are saved/loaded
             await SaveSubjectAliasesToLocalStorage();
             await LoadSubjectAliasesFromLocalStorage();
+            await LoadSubjectColorsFromLocalStorage();
 
             var schedule = await ScheduleApi.GetUnizaScheduleContentAsync(new TeacherScheduleRequest(_selectedTeacher.PersonalNumber));
             if (schedule is null || !schedule.Any())
@@ -203,7 +1105,7 @@
                 _error = "Rozvrh sa nenašiel";
                 return;
             }
-            var bytes = CreateExcelFromTemplate(schedule.ToList(), _selectedTeacher.Name, _includeBlocks, _subjectAliases);
+            var bytes = CreateExcelFromTemplate(schedule.ToList(), _selectedTeacher.Name, _includeBlocks, _subjectAliases, _customBlocks, _scheduleVerticals, _subjectColors);
             var base64 = Convert.ToBase64String(bytes);
             var fileName = $"Rozvrh_{SanitizeFileName(_selectedTeacher.Name)}.xlsx";
             await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", base64);
@@ -220,11 +1122,164 @@
         var invalid = System.IO.Path.GetInvalidFileNameChars();
         return new string(name.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray());
     }
+
+    private static string DaySk(DayOfWeek day)
+    => day switch
+    {
+        DayOfWeek.Monday => "Pondelok",
+        DayOfWeek.Tuesday => "Utorok",
+        DayOfWeek.Wednesday => "Streda",
+        DayOfWeek.Thursday => "Štvrtok",
+        DayOfWeek.Friday => "Piatok",
+        _ => day.ToString()
+    };
+
+    private static string GetFillHex(KST.UnizaSchedule.Api.Enums.LessonType type)
+    => type switch
+    {
+        KST.UnizaSchedule.Api.Enums.LessonType.Lecture => "#F9CB9C", // fallback
+        KST.UnizaSchedule.Api.Enums.LessonType.Laboratory or KST.UnizaSchedule.Api.Enums.LessonType.Excercise => "#FFF2CC", // fallback
+        KST.UnizaSchedule.Api.Enums.LessonType.Blocked => "#D5D5D5", // sivá
+        _ => "#EA9999" // červená
+    };
+
+    private static string GetFillHexForKind(UserBlockKind kind)
+    => kind switch
+    {
+        UserBlockKind.Lecture => "#F9CB9C",
+        UserBlockKind.Laboratory or UserBlockKind.Excercise => "#FFF2CC",
+        UserBlockKind.Blocked => "#D5D5D5",
+        UserBlockKind.Meeting => "#6C757D", // šedá
+        UserBlockKind.Consultation => "#0D6EFD", // modrá
+        UserBlockKind.Lunch => "#3b3b3b", // čierna
+        _ => "#EA9999"
+    };
+
+    private string GetSubjectBasedFill(string? courseOrShortcut, KST.UnizaSchedule.Api.Enums.LessonType type)
+    {
+        var baseHex = GetSubjectColorHex(courseOrShortcut);
+        if (string.IsNullOrWhiteSpace(baseHex))
+        {
+            return GetFillHex(type);
+        }
+        // Lecture should be darker shade of subject color
+        if (type == KST.UnizaSchedule.Api.Enums.LessonType.Lecture)
+            return DarkenHex(baseHex, 0.25);
+        // Exercises/Labs: base color
+        return baseHex;
+    }
+
+    private string GetSubjectColorHex(string? courseOrShortcut)
+    {
+        if (string.IsNullOrWhiteSpace(courseOrShortcut)) return "";
+        if (_subjectColors.TryGetValue(courseOrShortcut, out var c) && !string.IsNullOrWhiteSpace(c)) return NormalizeHex(c);
+        // try find by alias reverse mapping
+        var kv = _subjectAliases.FirstOrDefault(kv => string.Equals(kv.Value, courseOrShortcut, StringComparison.Ordinal));
+        if (!string.IsNullOrEmpty(kv.Key) && _subjectColors.TryGetValue(kv.Key, out var c2)) return NormalizeHex(c2);
+        return "";
+    }
+
+    private static string NormalizeHex(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return "#000000";
+        var h = hex.Trim();
+        if (!h.StartsWith('#')) h = "#" + h;
+        if (h.Length == 4) // #RGB -> #RRGGBB
+        {
+            h = "#" + new string(new[] { h[1], h[1], h[2], h[2], h[3], h[3] });
+        }
+        return h.Length >= 7 ? h.Substring(0, 7) : h;
+    }
+
+    private static string DarkenHex(string hex, double amount)
+    {
+        (int r, int g, int b) = ParseHex(hex);
+        r = (int)Math.Clamp(r * (1 - amount), 0, 255);
+        g = (int)Math.Clamp(g * (1 - amount), 0, 255);
+        b = (int)Math.Clamp(b * (1 - amount), 0, 255);
+        return $"#{r:X2}{g:X2}{b:X2}";
+    }
+
+    private static (int r, int g, int b) ParseHex(string hex)
+    {
+        var h = NormalizeStaticHex(hex);
+        int r = Convert.ToInt32(h.Substring(1, 2), 16);
+        int g = Convert.ToInt32(h.Substring(3, 2), 16);
+        int b = Convert.ToInt32(h.Substring(5, 2), 16);
+        return (r, g, b);
+    }
+
+    private static string NormalizeStaticHex(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return "#000000";
+        var h = hex.Trim();
+        if (!h.StartsWith('#')) h = "#" + h;
+        if (h.Length == 4)
+        {
+            h = "#" + new string(new[] { h[1], h[1], h[2], h[2], h[3], h[3] });
+        }
+        if (h.Length < 7) h = h.PadRight(7, '0');
+        return h.Substring(0, 7);
+    }
+
+    private static string GetIdealTextColor(string bgHex)
+    {
+        var (r, g, b) = ParseHex(bgHex);
+        // Perceived brightness formula
+        var brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        return brightness < 128 ? "#FFFFFF" : "#000000";
+    }
+
+    private class PreviewSpan
+    {
+        public DayOfWeek Day { get; set; }
+        public int StartHalfIndex { get; set; }
+        public int DurationHalfSlots { get; set; }
+        public KST.UnizaSchedule.Api.Enums.LessonType LessonType { get; set; }
+        public string? CourseName { get; set; }
+        public string? SubjectShortcut { get; set; }
+        public string? RoomName { get; set; }
+        public bool IsCustom { get; set; }
+        public string? CustomText { get; set; }
+        public bool Vertical { get; set; }
+        public UserBlockKind? CustomKind { get; set; }
+    }
+
+    private class CustomBlock
+    {
+        public DayOfWeek Day { get; set; }
+        public int StartHalfIndex { get; set; }
+        public int DurationHalfSlots { get; set; }
+        public string Text { get; set; } = string.Empty;
+        public bool Vertical { get; set; } = false;
+        public UserBlockKind Kind { get; set; } = UserBlockKind.Blocked;
+        // Legacy compatibility field (ignored for rendering)
+        public KST.UnizaSchedule.Api.Enums.LessonType Type { get; set; } = KST.UnizaSchedule.Api.Enums.LessonType.Blocked;
+    }
+
+    private class ContextTarget
+    {
+        public DayOfWeek Day { get; set; }
+        public int StartHalf { get; set; }
+        public int DurationHalf { get; set; }
+        public bool IsCustom { get; set; }
+        public KST.UnizaSchedule.Api.Enums.LessonType Type { get; set; }
+        public string? CourseName { get; set; }
+        public string? SubjectShortcut { get; set; }
+        public string? RoomName { get; set; }
+    }
+
+    private class ScheduleVertical
+    {
+        public DayOfWeek Day { get; set; }
+        public int StartHalf { get; set; }
+        public int DurationHalf { get; set; }
+    }
 }
 
 @code
 {
-    private static byte[] CreateExcelFromTemplate(List<ScheduleContent> schedules, string teacherName, bool includeBlocked, Dictionary<string, string> aliases)
+    private static byte[] CreateExcelFromTemplate(List<ScheduleContent> schedules, string teacherName, bool includeBlocked, Dictionary<string, string> aliases, List<CustomBlock> customBlocks, List<ScheduleVertical> scheduleVerticals, Dictionary<string, string> subjectColors)
     {
         // optional filtering of blocked items
         if (!includeBlocked)
@@ -236,7 +1291,7 @@
         using var wb = new XLWorkbook(templateStream);
         var ws = wb.Worksheets.First();
 
-        // 1) Title replacement (find cell containing "semester")
+        //1) Title replacement (find cell containing "semester")
         var now = DateTime.Now;
         var sem = KST.UnizaSchedule.Api.Enums.Semester.Winter == ScheduleApiHelpers.GetSemester(now) ? "zimný" : "letný";
         var studyYear = ScheduleApiHelpers.GetStudyYear(now);
@@ -248,7 +1303,7 @@
             titleCell.Value = titleText;
         }
 
-        // 2) Find header row with hour labels and build hour->(startCol,endCol) map using merged header cells
+        //2) Find header row with hour labels and build hour->(startCol,endCol) map using merged header cells
         var hourCellsAll = ws.CellsUsed(c =>
         {
             var s2 = c.GetString();
@@ -258,14 +1313,14 @@
             throw new InvalidOperationException("V šablóne neboli nájdené hlavičky hodín");
 
         var headerRow = hourCellsAll
-            .GroupBy(c => c.Address.RowNumber)
-            .OrderByDescending(g => g.Count())
-            .First().Key;
+        .GroupBy(c => c.Address.RowNumber)
+        .OrderByDescending(g => g.Count())
+        .First().Key;
 
         var headerRowCells = hourCellsAll
-            .Where(c => c.Address.RowNumber == headerRow)
-            .OrderBy(c => c.Address.ColumnNumber)
-            .ToList();
+        .Where(c => c.Address.RowNumber == headerRow)
+        .OrderBy(c => c.Address.ColumnNumber)
+        .ToList();
 
         // Map hour -> full merged range (start..end) in header
         var hourToRange = new Dictionary<int, (int startCol, int endCol)>();
@@ -287,15 +1342,15 @@
                 throw new InvalidOperationException($"V šablóne nebol nájdený stĺpec pre čas {h}:00");
         }
 
-        // 3) Build day->row pair map from labels (Pondelok..Piatok)
+        //3) Build day->row pair map from labels (Pondelok..Piatok)
         var dayMap = new Dictionary<DayOfWeek, (int top, int bottom)>();
         var skDays = new (DayOfWeek day, string text)[]
         {
-            (DayOfWeek.Monday, "Pondelok"),
-            (DayOfWeek.Tuesday, "Utorok"),
-            (DayOfWeek.Wednesday, "Streda"),
-            (DayOfWeek.Thursday, "Štvrtok"),
-            (DayOfWeek.Friday, "Piatok")
+ (DayOfWeek.Monday, "Pondelok"),
+ (DayOfWeek.Tuesday, "Utorok"),
+ (DayOfWeek.Wednesday, "Streda"),
+ (DayOfWeek.Thursday, "Štvrtok"),
+ (DayOfWeek.Friday, "Piatok")
         };
         foreach (var (day, text) in skDays)
         {
@@ -305,68 +1360,136 @@
             dayMap[day] = (cell.Address.RowNumber, cell.Address.RowNumber + 1);
         }
 
-        // 4) Order and group consecutive schedule items
-        var ordered = schedules
-            .OrderBy(s => s.Day)
-            .ThenBy(s => s.BlockNumber)
-            .ThenBy(s => s.CourseName)
-            .ToList();
-
-        int i = 0;
-        while (i < ordered.Count)
+        // Helper to map half index (0..totalHalf-1) to (startCol,endCol)
+        (int start, int end) HalfToCols(int halfIndex)
         {
-            var cur = ordered[i];
+            int hour = ScheduleTable.FirstBlockHour + (halfIndex / 2);
+            bool second = (halfIndex % 2) == 1;
+            var (hs, he) = hourToRange[hour];
+            var w = he - hs + 1;
+            if (w <= 1)
+            {
+                return (hs, he);
+            }
+            int midEnd = hs + (w / 2) - 1;
+            if (!second)
+                return (hs, midEnd);
+            return (midEnd + 1, he);
+        }
+
+        // Build spans from schedules split by custom blocks occupancy (half-hour)
+        var totalHalf = (ScheduleTable.LastBlockHour - ScheduleTable.FirstBlockHour + 1) * 2;
+        var occupancy = new Dictionary<DayOfWeek, bool[]>();
+        foreach (var d in skDays.Select(x => x.day)) occupancy[d] = new bool[totalHalf];
+        foreach (var cb in customBlocks)
+        {
+            if (!occupancy.TryGetValue(cb.Day, out var arr)) continue;
+            var s = Math.Clamp(cb.StartHalfIndex, 0, totalHalf);
+            var e = Math.Clamp(cb.StartHalfIndex + cb.DurationHalfSlots, 0, totalHalf);
+            for (int i = s; i < e; i++) arr[i] = true;
+        }
+
+        var ordered = schedules
+        .OrderBy(s => s.Day)
+        .ThenBy(s => s.BlockNumber)
+        .ThenBy(s => s.CourseName)
+        .ToList();
+
+        var spans = new List<(DayOfWeek day, int startHalf, int durHalf, KST.UnizaSchedule.Api.Enums.LessonType type, string? course, string? subjShortcut, string? room, bool isCustom, string? customText, bool isVertical, UserBlockKind? customKind)>();
+        int idx = 0;
+        while (idx < ordered.Count)
+        {
+            var cur = ordered[idx];
             int count = 1;
-            int j = i + 1;
+            int j = idx + 1;
             while (j < ordered.Count)
             {
                 var nx = ordered[j];
-                if (nx.Day == cur.Day &&
-                    nx.CourseName == cur.CourseName &&
-                    nx.RoomName == cur.RoomName &&
-                    nx.LessonType == cur.LessonType &&
-                    nx.SubjectShortcut == cur.SubjectShortcut &&
-                    nx.BlockNumber == cur.BlockNumber + (j - i))
+                if (nx.Day == cur.Day && nx.CourseName == cur.CourseName && nx.RoomName == cur.RoomName && nx.LessonType == cur.LessonType && nx.SubjectShortcut == cur.SubjectShortcut && nx.BlockNumber == cur.BlockNumber + (j - idx))
                 {
                     count++;
                     j++;
                 }
                 else break;
             }
-
             var startHour = ScheduleTable.FirstBlockHour + cur.BlockNumber - 1;
-            var lastHour = startHour + count - 1;
-            var startCol = hourToRange[startHour].startCol;
-            var endCol = hourToRange[lastHour].endCol; // cover full merged area of the last hour
+            var startHalf = (startHour - ScheduleTable.FirstBlockHour) * 2;
+            var durHalf = count * 2;
+            var occ = occupancy[cur.Day];
+            int k = startHalf; int end = startHalf + durHalf;
+            while (k < end)
+            {
+                while (k < end && occ[k]) k++;
+                if (k >= end) break;
+                int segStart = k;
+                while (k < end && !occ[k]) k++;
+                int segDur = k - segStart;
+                if (segDur > 0)
+                    spans.Add((cur.Day, segStart, segDur, cur.LessonType, cur.CourseName, cur.SubjectShortcut, cur.RoomName, false, null, scheduleVerticals.Any(v => v.Day == cur.Day && v.StartHalf == segStart && v.DurationHalf == segDur), null));
+            }
+            idx = j;
+        }
+        // add custom
+        foreach (var cb in customBlocks)
+        {
+            spans.Add((cb.Day, cb.StartHalfIndex, cb.DurationHalfSlots, KST.UnizaSchedule.Api.Enums.LessonType.Blocked, null, null, null, true, cb.Text, cb.Vertical, cb.Kind));
+        }
 
-            var (topRow, bottomRow) = dayMap[cur.Day];
+        // Render spans
+        foreach (var s in spans.OrderBy(x => x.day).ThenBy(x => x.startHalf))
+        {
+            var (topRow, bottomRow) = dayMap[s.day];
+            var (startCol, _) = HalfToCols(s.startHalf);
+            var (_, endCol) = HalfToCols(s.startHalf + s.durHalf - 1);
             var rng = ws.Range(topRow, startCol, bottomRow, endCol);
             rng.Merge();
 
-            // Text content
+            // text
             var lines = new List<string>();
-            lines.Add(LessonTypeSk(cur.LessonType));
-            var subj = cur.CourseName ?? cur.SubjectShortcut;
-            if (!string.IsNullOrWhiteSpace(cur.CourseName) && aliases.TryGetValue(cur.CourseName, out var alias) && !string.IsNullOrWhiteSpace(alias))
+            if (s.isCustom)
             {
-                subj = alias;
+                if (!string.IsNullOrWhiteSpace(s.customText)) lines.Add(s.customText!);
             }
-            if (!string.IsNullOrWhiteSpace(subj)) lines.Add(subj);
-            if (!string.IsNullOrWhiteSpace(cur.RoomName)) lines.Add(cur.RoomName);
-            // Groups intentionally not written
+            else
+            {
+                lines.Add(LessonTypeSk(s.type));
+                var subj = s.course ?? s.subjShortcut;
+                if (!string.IsNullOrWhiteSpace(s.course) && aliases.TryGetValue(s.course!, out var alias) && !string.IsNullOrWhiteSpace(alias)) subj = alias;
+                if (!string.IsNullOrWhiteSpace(subj)) lines.Add(subj!);
+                if (!string.IsNullOrWhiteSpace(s.room)) lines.Add(s.room!);
+            }
             rng.Value = string.Join("\n", lines);
 
-            // Style
+            // style
             var style = rng.Style;
             style.Alignment.WrapText = true;
             style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
             style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            style.Alignment.TextRotation = s.isVertical ? 90 : 0;
             style.Border.OutsideBorder = XLBorderStyleValues.Medium;
             style.Border.OutsideBorderColor = XLColor.Black;
             style.Font.Bold = false;
-            style.Fill.BackgroundColor = GetFill(cur.LessonType);
 
-            i = j;
+            string fillHex;
+            if (s.isCustom)
+            {
+                fillHex = GetFillHexForKindExcel(s.customKind ?? UserBlockKind.Blocked);
+            }
+            else
+            {
+                var baseHex = GetSubjectColorHexExcel(subjectColors, aliases, s.course, s.subjShortcut);
+                if (string.IsNullOrWhiteSpace(baseHex))
+                {
+                    fillHex = GetFillExcel(s.type);
+                }
+                else
+                {
+                    fillHex = s.type == KST.UnizaSchedule.Api.Enums.LessonType.Lecture ? DarkenHex(baseHex, 0.25) : baseHex;
+                }
+            }
+            style.Fill.BackgroundColor = XLColor.FromHtml(fillHex);
+            var fontHex = GetIdealTextColor(fillHex);
+            style.Font.FontColor = XLColor.FromHtml(fontHex);
         }
 
         using var ms = new MemoryStream();
@@ -388,13 +1511,45 @@
 
     private static XLColor GetFill(KST.UnizaSchedule.Api.Enums.LessonType type)
     {
+        return XLColor.FromHtml(GetFillExcel(type));
+    }
+
+    private static string GetFillExcel(KST.UnizaSchedule.Api.Enums.LessonType type)
+    {
         return type switch
         {
-            KST.UnizaSchedule.Api.Enums.LessonType.Lecture => XLColor.FromHtml("#F9CB9C"), // oranžová
-            KST.UnizaSchedule.Api.Enums.LessonType.Laboratory or KST.UnizaSchedule.Api.Enums.LessonType.Excercise => XLColor.FromHtml("#FFF2CC"), // žltá
-            KST.UnizaSchedule.Api.Enums.LessonType.Blocked => XLColor.FromHtml("#D5D5D5"), // sivá
-            _ => XLColor.FromHtml("#EA9999") // červená
+            KST.UnizaSchedule.Api.Enums.LessonType.Lecture => "#F9CB9C",
+            KST.UnizaSchedule.Api.Enums.LessonType.Laboratory or KST.UnizaSchedule.Api.Enums.LessonType.Excercise => "#FFF2CC",
+            KST.UnizaSchedule.Api.Enums.LessonType.Blocked => "#D5D5D5",
+            _ => "#EA9999"
         };
+    }
+
+    private static XLColor GetFillForKind(UserBlockKind kind)
+    {
+        return XLColor.FromHtml(GetFillHexForKindExcel(kind));
+    }
+
+    private static string GetFillHexForKindExcel(UserBlockKind kind)
+    {
+        return kind switch
+        {
+            UserBlockKind.Lecture => "#F9CB9C",
+            UserBlockKind.Laboratory or UserBlockKind.Excercise => "#FFF2CC",
+            UserBlockKind.Blocked => "#D5D5D5",
+            UserBlockKind.Meeting => "#6C757D",
+            UserBlockKind.Consultation => "#0D6EFD",
+            UserBlockKind.Lunch => "#000000",
+            _ => "#EA9999"
+        };
+    }
+
+    private static string GetSubjectColorHexExcel(Dictionary<string, string> subjectColors, Dictionary<string, string> aliases, string? course, string? subjShortcut)
+    {
+        if (!string.IsNullOrWhiteSpace(course) && subjectColors.TryGetValue(course!, out var c) && !string.IsNullOrWhiteSpace(c)) return NormalizeStaticHex(c);
+        if (!string.IsNullOrWhiteSpace(course) && aliases.TryGetValue(course!, out var alias) && !string.IsNullOrWhiteSpace(alias) && subjectColors.TryGetValue(alias, out var c2)) return NormalizeStaticHex(c2);
+        if (!string.IsNullOrWhiteSpace(subjShortcut) && subjectColors.TryGetValue(subjShortcut!, out var c3)) return NormalizeStaticHex(c3);
+        return "";
     }
 
     private static string LessonTypeSk(KST.UnizaSchedule.Api.Enums.LessonType type)

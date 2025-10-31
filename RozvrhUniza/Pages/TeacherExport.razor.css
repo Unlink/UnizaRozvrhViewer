@@ -1,0 +1,34 @@
+/* Scoped styles for TeacherExport */
+
+.clickable-cell {
+ cursor: pointer;
+ position: relative;
+}
+
+.clickable-cell:hover::after {
+ content: "";
+ position: absolute;
+ inset:2px;
+ outline:2px dashed #0d6efd;
+ pointer-events: none;
+}
+
+/* vertical text rendering inside table cell */
+.vertical-text {
+ writing-mode: vertical-rl;
+ transform: rotate(180deg); /* make it bottom-to-top */
+ display: inline-block;
+ white-space: pre-line;
+}
+
+/* preview table: enforce equal width columns */
+.table.preview-table {
+ table-layout: fixed;
+ width:100%;
+}
+
+.table.preview-table td,
+.table.preview-table th {
+ overflow: hidden;
+ text-overflow: ellipsis;
+}

@@ -4,6 +4,7 @@
 @using KST.UnizaSchedule.Api.ScheduleRequests
 @using KST.UnizaSchedule.Table
 @inject ILogger<Home> Logger
+@inject IJSRuntime JS
 
 <PageTitle>Vyhæad·vanie prienikov</PageTitle>
 
@@ -102,6 +103,9 @@
             }
             Vyhæadaù prieniky
         </button>
+        <button type="button" class="btn btn-outline-danger" @onclick="ClearAllSelections" disabled="@(!_selectedTeachers.Any() && !_selectedGroups.Any() && !_selectedRooms.Any())">
+            Vymazaù vöetko
+        </button>
         @if (!string.IsNullOrWhiteSpace(_searchError))
         {
             <span class="text-danger">@_searchError</span>
@@ -197,6 +201,16 @@
     private record FreeSpan(DayOfWeek Day, int StartHalfIndex, int DurationHalfSlots, List<string>? FreeRooms);
     private Dictionary<DayOfWeek, List<FreeSpan>>? _freeMap;
 
+    private const string SelectedTeachersKey = "intersect_selected_teachers";
+    private const string SelectedGroupsKey = "intersect_selected_groups";
+    private const string SelectedRoomsKey = "intersect_selected_rooms";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        await LoadSelectionsFromLocalStorage();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -231,34 +245,38 @@
         }
     }
 
-    private void AddTeacher(UnizaTeacher teacher)
+    private async Task AddTeacher(UnizaTeacher teacher)
     {
         if (_selectedTeachers.All(t => t.Id != teacher.Id))
         {
             _selectedTeachers.Add(teacher);
+            await SaveSelectedTeachersToLocalStorage();
         }
         _teacherQuery = string.Empty;
         _teacherSuggestions.Clear();
     }
 
-    private void RemoveTeacher(UnizaTeacher teacher)
+    private async Task RemoveTeacher(UnizaTeacher teacher)
     {
         _selectedTeachers.RemoveAll(t => t.Id == teacher.Id);
+        await SaveSelectedTeachersToLocalStorage();
     }
 
-    private void AddGroupFromInput()
+    private async Task AddGroupFromInput()
     {
         var group = _groupQuery?.Trim();
         if (!string.IsNullOrWhiteSpace(group) && !_selectedGroups.Contains(group))
         {
             _selectedGroups.Add(group);
+            await SaveSelectedGroupsToLocalStorage();
         }
         _groupQuery = string.Empty;
     }
 
-    private void RemoveGroup(string group)
+    private async Task RemoveGroup(string group)
     {
         _selectedGroups.Remove(group);
+        await SaveSelectedGroupsToLocalStorage();
     }
 
     private async Task RoomInputChanged(ChangeEventArgs arg)
@@ -287,19 +305,41 @@
         }
     }
 
-    private void AddRoom(UnizaRoom room)
+    private async Task AddRoom(UnizaRoom room)
     {
         if (_selectedRooms.All(r => r.Id != room.Id))
         {
             _selectedRooms.Add(room);
+            await SaveSelectedRoomsToLocalStorage();
         }
         _roomQuery = string.Empty;
         _roomSuggestions.Clear();
     }
 
-    private void RemoveRoom(UnizaRoom room)
+    private async Task RemoveRoom(UnizaRoom room)
     {
         _selectedRooms.RemoveAll(r => r.Id == room.Id);
+        await SaveSelectedRoomsToLocalStorage();
+    }
+
+    private async Task ClearAllSelections()
+    {
+        _selectedTeachers.Clear();
+        _selectedGroups.Clear();
+        _selectedRooms.Clear();
+        _teacherSuggestions.Clear();
+        _roomSuggestions.Clear();
+        _teacherQuery = string.Empty;
+        _groupQuery = string.Empty;
+        _roomQuery = string.Empty;
+        _freeMap = null;
+        _searchError = null;
+
+        await SaveSelectedTeachersToLocalStorage();
+        await SaveSelectedGroupsToLocalStorage();
+        await SaveSelectedRoomsToLocalStorage();
+
+        await _teacherInputRef.FocusAsync();
     }
 
     private async Task SearchIntersections()
@@ -452,6 +492,60 @@
         int s = Math.Clamp(startHalf, 0, total);
         int e = Math.Clamp(startHalf + dur, 0, total);
         for (int i = s; i < e; i++) arr[i] = true;
+    }
+
+    private async Task SaveSelectedTeachersToLocalStorage()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(_selectedTeachers);
+        await JS.InvokeVoidAsync("localStorage.setItem", SelectedTeachersKey, json);
+    }
+
+    private async Task SaveSelectedGroupsToLocalStorage()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(_selectedGroups);
+        await JS.InvokeVoidAsync("localStorage.setItem", SelectedGroupsKey, json);
+    }
+
+    private async Task SaveSelectedRoomsToLocalStorage()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(_selectedRooms);
+        await JS.InvokeVoidAsync("localStorage.setItem", SelectedRoomsKey, json);
+    }
+
+    private async Task LoadSelectionsFromLocalStorage()
+    {
+        try
+        {
+            var tj = await JS.InvokeAsync<string>("localStorage.getItem", SelectedTeachersKey);
+            if (!string.IsNullOrWhiteSpace(tj))
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<List<UnizaTeacher>>(tj);
+                if (loaded is not null) _selectedTeachers = loaded;
+            }
+        }
+        catch { }
+
+        try
+        {
+            var gj = await JS.InvokeAsync<string>("localStorage.getItem", SelectedGroupsKey);
+            if (!string.IsNullOrWhiteSpace(gj))
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<List<string>>(gj);
+                if (loaded is not null) _selectedGroups = loaded;
+            }
+        }
+        catch { }
+
+        try
+        {
+            var rj = await JS.InvokeAsync<string>("localStorage.getItem", SelectedRoomsKey);
+            if (!string.IsNullOrWhiteSpace(rj))
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<List<UnizaRoom>>(rj);
+                if (loaded is not null) _selectedRooms = loaded;
+            }
+        }
+        catch { }
     }
 
     private static string DaySk(DayOfWeek day)

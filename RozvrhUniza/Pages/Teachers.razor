@@ -10,30 +10,59 @@
 <PageTitle>Prehľadný rozvrh - Učitelia</PageTitle>
 
 <form onsubmit="return false;">
-    <div class="mb-3">
-        <label class="form-label">Vybraní učitelia</label>
-        <ul class="list-group">
-            @foreach (var t in _teachers)
-            {
-                <li class="list-group-item">@t.Name <button class="ms btn btn-sm btn-danger" @onclick="() => RemoveTeacher(t)">X</button></li>
-            }
-        </ul>
-    </div>
+    <div class="row g-3">
+        <div class="col-md-8">
+            <div class="mb-3">
+                <label class="form-label">Vybraní učitelia</label>
+                <ul class="list-group">
+                    @foreach (var t in _teachers)
+                    {
+                        <li class="list-group-item">@t.Name <button class="ms btn btn-sm btn-danger" @onclick="() => RemoveTeacher(t)">X</button></li>
+                    }
+                </ul>
+            </div>
 
-    <div class="mb-3">
-        <label class="form-label">Pridať učiteľa</label>
-        <input type="text" class="form-control" value="@_name" @oninput="InputChanged" @ref="_elRef">
-        @if (_suggestions.Any())
-        {
-            <ul class="dropdown-menu d-block">
-                @foreach (var s in _suggestions)
+            <div class="mb-3">
+                <label class="form-label">Pridať učiteľa</label>
+                <input type="text" class="form-control" value="@_name" @oninput="InputChanged" @ref="_elRef">
+                @if (_suggestions.Any())
                 {
-                    <li @onclick="() => AddTeacher(s)"><a class="dropdown-item">@s.Name</a></li>
+                    <ul class="dropdown-menu d-block">
+                        @foreach (var s in _suggestions)
+                        {
+                            <li @onclick="() => AddTeacher(s)"><a class="dropdown-item">@s.Name</a></li>
+                        }
+                    </ul>
                 }
-            </ul>
-        }
+            </div>
+            <button type="submit" class="btn btn-primary" @onclick="LoadRozvrh">Zobraziť rozvrh</button>
+        </div>
+        <div class="col-md-4">
+            <div class="mb-3">
+                <label class="form-label">Názov novej záložky</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" placeholder="Moja skupina" @bind="_groupName">
+                    <button class="btn btn-outline-primary" type="button" @onclick="SaveCurrentGroup">Uložiť aktuálny zoznam</button>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Uložené skupiny</label>
+                @if (_teacherGroups.Any())
+                {
+                    <ul class="list-group">
+                        @foreach (var g in _teacherGroups)
+                        {
+                            <li class="list-group-item list-group-item-action" role="button" @onclick="() => LoadGroup(g)">@g.Name (@g.Teachers.Count)</li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <div class="text-muted">Zatiaľ nemáte uložené žiadne skupiny.</div>
+                }
+            </div>
+        </div>
     </div>
-    <button type="submit" class="btn btn-primary" @onclick="LoadRozvrh">Zobraziť rozvrh</button>
 </form>
 
 @if (_sheduleData != null)
@@ -50,6 +79,8 @@
 
 @code {
     private record Teacher(string PersonalNumber, string Name);
+    private record TeacherGroup(string Name, List<Teacher> Teachers);
+
     private List<Teacher> _teachers = new();
     private string _name = "";
     private List<Teacher> _suggestions = new();
@@ -58,11 +89,16 @@
     private bool _hasError = false;
     private GroupedScheduleTable? _sheduleData;
     private const string TeachersStorageKey = "vybrani_ucitelia";
+    private const string TeacherGroupsStorageKey = "ucitelske_zalozky";
+
+    private string _groupName = string.Empty;
+    private List<TeacherGroup> _teacherGroups = new();
 
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
         await LoadTeachersFromLocalStorage();
+        await LoadGroupsFromLocalStorage();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -170,6 +206,57 @@
                 var loaded = System.Text.Json.JsonSerializer.Deserialize<List<Teacher>>(json);
                 if (loaded != null)
                     _teachers = loaded;
+            }
+            catch { }
+        }
+    }
+
+    private async Task SaveCurrentGroup()
+    {
+        if (string.IsNullOrWhiteSpace(_groupName) || !_teachers.Any())
+        {
+            return;
+        }
+
+        // Update if name already exists, else add new
+        var existing = _teacherGroups.FirstOrDefault(g => string.Equals(g.Name, _groupName, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            _teacherGroups.Remove(existing);
+        }
+        _teacherGroups.Add(new TeacherGroup(_groupName.Trim(), _teachers.Select(t => new Teacher(t.PersonalNumber, t.Name)).ToList()));
+
+        await SaveGroupsToLocalStorage();
+        _groupName = string.Empty;
+        StateHasChanged();
+    }
+
+    private async Task LoadGroup(TeacherGroup group)
+    {
+        _teachers = group.Teachers.Select(t => new Teacher(t.PersonalNumber, t.Name)).ToList();
+        await SaveTeachersToLocalStorage();
+        _name = string.Empty;
+        _suggestions.Clear();
+        await _elRef.FocusAsync();
+        StateHasChanged();
+    }
+
+    private async Task SaveGroupsToLocalStorage()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(_teacherGroups);
+        await JS.InvokeVoidAsync("localStorage.setItem", TeacherGroupsStorageKey, json);
+    }
+
+    private async Task LoadGroupsFromLocalStorage()
+    {
+        var json = await JS.InvokeAsync<string>("localStorage.getItem", TeacherGroupsStorageKey);
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            try
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<List<TeacherGroup>>(json);
+                if (loaded != null)
+                    _teacherGroups = loaded;
             }
             catch { }
         }

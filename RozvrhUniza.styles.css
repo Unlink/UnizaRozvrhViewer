@@ -1,53 +1,12 @@
 /* /Components/ScheduleView.razor.rz.scp.css */
 table[b-67l2i2f16c] {
-    border-collapse: collapse;
     width: 100%;
     table-layout: fixed;
-    border: 2px solid black;
     margin: 5px;
-}
-
-table th[b-67l2i2f16c] {
-   text-align: left;
-   vertical-align: top;
-   border: 1px solid black;
-   background: #ecf0f1;
-   padding: 2px;
-}
-
-table td[b-67l2i2f16c] {
-    font-size: 12px;
-    vertical-align: top;
-    overflow: hidden;
-    width: auto;
-    border: 1px dotted #95a5a6;
-}
-
-table tbody tr[b-67l2i2f16c] {
-    height: 65px;
-}
-
-
-table thead[b-67l2i2f16c]  {
-    position: sticky;
-    top: 0;
-    background: white;
-}
-
-table thead tr[b-67l2i2f16c] {
-    height: 30px;
 }
 
 table tr th:first-child[b-67l2i2f16c] {
     width: 150px;
-}
-
-table td.blok[b-67l2i2f16c] {
-    border: black solid 1px;
-}
-
-table .first-day-row[b-67l2i2f16c] {
-    border-top: 2px solid black;
 }
 /* /Layout/MainLayout.razor.rz.scp.css */
 .page[b-wfn32geh4u] {
@@ -126,4 +85,65 @@ main[b-wfn32geh4u] {
         padding-left: 2rem !important;
         padding-right: 1.5rem !important;
     }
+}
+/* /Pages/IntersectionSearch.razor.rz.scp.css */
+/* Scoped styles for IntersectionSearch */
+
+/* Ensure equal-size grid like export preview */
+.table.free-table[b-jh46icx55d] { table-layout: fixed; width:100%; }
+.table.free-table td[b-jh46icx55d], .table.free-table th[b-jh46icx55d] { overflow: hidden; text-overflow: ellipsis; }
+
+/* Make all data cells the same height by forcing two-row body with same heights */
+.table.free-table tbody tr[b-jh46icx55d] { height:44px; }
+.table.free-table tbody tr + tr[b-jh46icx55d] { height:0; }
+
+/* Theme-aware free cells */
+.free-cell[b-jh46icx55d] {
+ background-color: color-mix(in srgb, #2e7d3220%, var(--card-bg));
+ color: #e8f5e9;
+}
+
+/* Header look consistent with theme */
+.table.free-table thead th[b-jh46icx55d] {
+ background-color: color-mix(in srgb, var(--card-bg)88%, #ffffff12%);
+}
+/* /Pages/TeacherExport.razor.rz.scp.css */
+/* Scoped styles for TeacherExport */
+
+.clickable-cell[b-633w8d2dmg] {
+ cursor: pointer;
+ position: relative;
+}
+
+.clickable-cell:hover[b-633w8d2dmg]::after {
+ content: "";
+ position: absolute;
+ inset:2px;
+ outline:2px dashed var(--link);
+ pointer-events: none;
+}
+
+/* vertical text rendering inside table cell */
+.vertical-text[b-633w8d2dmg] {
+ writing-mode: vertical-rl;
+ transform: rotate(180deg); /* make it bottom-to-top */
+ display: inline-block;
+ white-space: pre-line;
+}
+
+/* preview table: enforce equal width columns */
+.table.preview-table[b-633w8d2dmg] {
+ table-layout: fixed;
+ width:100%;
+}
+
+.table.preview-table td[b-633w8d2dmg],
+.table.preview-table th[b-633w8d2dmg] {
+ overflow: hidden;
+ text-overflow: ellipsis;
+}
+
+/* Make preview header slightly distinct in both themes (falls back if global already styles it) */
+.table.preview-table thead th[b-633w8d2dmg] {
+ background-color: color-mix(in srgb, var(--card-bg)88%, #ffffff12%);
 }

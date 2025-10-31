@@ -6,6 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RozvrhUniza</title>
     <base href="/UnizaRozvrhViewer/" />
+
+    <!-- Theme bootstrap: set initial theme before first paint -->
+    <script>
+        (function () {
+            const storageKey = 'theme-preference';
+            const persisted = localStorage.getItem(storageKey);
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = persisted || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+            window.theme = {
+                get: () => document.documentElement.getAttribute('data-theme') || 'light',
+                set: (t) => { document.documentElement.setAttribute('data-theme', t); localStorage.setItem(storageKey, t); return t; },
+                toggle: () => {
+                    const next = (window.theme.get() === 'dark') ? 'light' : 'dark';
+                    return window.theme.set(next);
+                }
+            };
+        })();
+    </script>
+
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
@@ -29,6 +49,10 @@
         <a href="" class="reload">Reload</a>
         <a class="dismiss">🗙</a>
     </div>
+
+    <!-- Bootstrap JS bundle (navbar toggler on mobile) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+
     <script src="_framework/blazor.webassembly.js" autostart="false"></script>
     <script>
         if ('serviceWorker' in navigator) {

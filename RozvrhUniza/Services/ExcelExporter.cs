@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -30,9 +30,9 @@ namespace RozvrhUniza.Services
             var ws = wb.Worksheets.First();
 
             var now = DateTime.Now;
-            var sem = KST.UnizaSchedule.Api.Enums.Semester.Winter == ScheduleApiHelpers.GetSemester(now) ? "zimný" : "letný";
+            var sem = KST.UnizaSchedule.Api.Enums.Semester.Winter == ScheduleApiHelpers.GetSemester(now) ? "zimnÃ½" : "letnÃ½";
             var studyYear = ScheduleApiHelpers.GetStudyYear(now);
-            var studyYearText = sem == "zimný" ? $"{studyYear}/{studyYear + 1}" : $"{studyYear - 1}/{studyYear}";
+            var studyYearText = sem == "zimnÃ½" ? $"{studyYear}/{studyYear + 1}" : $"{studyYear - 1}/{studyYear}";
             var titleText = $"{teacherName} - {sem} semester {studyYearText}";
             var titleCell = ws.CellsUsed(c => c.GetString().Contains("semester", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
             if (titleCell is not null)
@@ -46,7 +46,7 @@ namespace RozvrhUniza.Services
                 return s2.EndsWith(":00", StringComparison.OrdinalIgnoreCase) && int.TryParse(s2.AsSpan(0, s2.IndexOf(':')), out _);
             }).ToList();
             if (!hourCellsAll.Any())
-                throw new InvalidOperationException("V šablóne neboli nájdené hlavièky hodín");
+                throw new InvalidOperationException("V Å¡ablÃ³ne neboli nÃ¡jdenÃ© hlaviÄky hodÃ­n");
 
             var headerRow = hourCellsAll
             .GroupBy(c => c.Address.RowNumber)
@@ -72,7 +72,7 @@ namespace RozvrhUniza.Services
             for (var h = ScheduleTable.FirstBlockHour; h <= ScheduleTable.LastBlockHour; h++)
             {
                 if (!hourToRange.ContainsKey(h))
-                    throw new InvalidOperationException($"V šablóne nebol nájdený ståpec pre èas {h}:00");
+                    throw new InvalidOperationException($"V Å¡ablÃ³ne nebol nÃ¡jdenÃ½ stÄºpec pre Äas {h}:00");
             }
 
             var dayMap = new Dictionary<DayOfWeek, (int top, int bottom)>();
@@ -81,14 +81,14 @@ namespace RozvrhUniza.Services
                  (DayOfWeek.Monday, "Pondelok"),
                  (DayOfWeek.Tuesday, "Utorok"),
                  (DayOfWeek.Wednesday, "Streda"),
-                 (DayOfWeek.Thursday, "Štvrtok"),
+                 (DayOfWeek.Thursday, "Å tvrtok"),
                  (DayOfWeek.Friday, "Piatok")
             };
             foreach (var (day, text) in skDays)
             {
                 var cell = ws.CellsUsed(c => string.Equals(c.GetString(), text, StringComparison.Ordinal)).FirstOrDefault();
                 if (cell is null)
-                    throw new InvalidOperationException($"V šablóne nebol nájdený riadok pre deò '{text}'");
+                    throw new InvalidOperationException($"V Å¡ablÃ³ne nebol nÃ¡jdenÃ½ riadok pre deÅˆ '{text}'");
                 dayMap[day] = (cell.Address.RowNumber, cell.Address.RowNumber + 1);
             }
 
@@ -218,10 +218,10 @@ namespace RozvrhUniza.Services
             var asm = typeof(ExcelExporter).Assembly;
             var name = asm.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith("RozvrhDverePriklad.xlsx", StringComparison.OrdinalIgnoreCase));
             if (name is null)
-                throw new InvalidOperationException("Šablóna RozvrhDverePriklad.xlsx nebola nájdená ako EmbeddedResource.");
+                throw new InvalidOperationException("Å ablÃ³na RozvrhDverePriklad.xlsx nebola nÃ¡jdenÃ¡ ako EmbeddedResource.");
             var stream = asm.GetManifestResourceStream(name);
             if (stream is null)
-                throw new InvalidOperationException("Nepodarilo sa otvori stream šablóny RozvrhDverePriklad.xlsx.");
+                throw new InvalidOperationException("Nepodarilo sa otvoriÅ¥ stream Å¡ablÃ³ny RozvrhDverePriklad.xlsx.");
             return stream;
         }
 
@@ -229,8 +229,8 @@ namespace RozvrhUniza.Services
         {
             return type switch
             {
-                KST.UnizaSchedule.Api.Enums.LessonType.Lecture => "Prednáška",
-                KST.UnizaSchedule.Api.Enums.LessonType.Laboratory or KST.UnizaSchedule.Api.Enums.LessonType.Excercise => "Cvièenie",
+                KST.UnizaSchedule.Api.Enums.LessonType.Lecture => "PrednÃ¡Å¡ka",
+                KST.UnizaSchedule.Api.Enums.LessonType.Laboratory or KST.UnizaSchedule.Api.Enums.LessonType.Excercise => "CviÄenie",
                 KST.UnizaSchedule.Api.Enums.LessonType.Blocked => "Blok",
                 _ => ""
             };

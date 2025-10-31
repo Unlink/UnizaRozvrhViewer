@@ -1,4 +1,4 @@
-@page "/intersections"
+Ôªø@page "/intersections"
 
 @using KST.UnizaSchedule.Api
 @using KST.UnizaSchedule.Api.ScheduleRequests
@@ -6,15 +6,15 @@
 @inject ILogger<Home> Logger
 @inject IJSRuntime JS
 
-<PageTitle>Vyhæad·vanie prienikov</PageTitle>
+<PageTitle>Vyhƒæad√°vanie prienikov</PageTitle>
 
-<h3>Vyhæad·vanie prienikov</h3>
+<h3>Vyhƒæad√°vanie prienikov</h3>
 
 <form onsubmit="return false;">
     <div class="row g-4">
         <div class="col-md-4">
             <div class="mb-3">
-                <label class="form-label">VybranÌ uËitelia</label>
+                <label class="form-label">Vybran√≠ uƒçitelia</label>
                 <ul class="list-group">
                     @foreach (var t in _selectedTeachers)
                     {
@@ -26,7 +26,7 @@
                 </ul>
             </div>
             <div class="mb-3 position-relative">
-                <label class="form-label">Pridaù uËiteæa</label>
+                <label class="form-label">Prida≈• uƒçiteƒæa</label>
                 <input type="text" class="form-control" value="@_teacherQuery" @oninput="TeacherInputChanged" @ref="_teacherInputRef">
                 @if (_teacherSuggestions.Any())
                 {
@@ -42,7 +42,7 @@
 
         <div class="col-md-4">
             <div class="mb-3">
-                <label class="form-label">VybranÈ ötudijnÈ skupiny</label>
+                <label class="form-label">Vybran√© ≈°tudijn√© skupiny</label>
                 <ul class="list-group">
                     @foreach (var g in _selectedGroups)
                     {
@@ -54,17 +54,17 @@
                 </ul>
             </div>
             <div class="mb-3">
-                <label class="form-label">Pridaù ötudijn˙ skupinu</label>
+                <label class="form-label">Prida≈• ≈°tudijn√∫ skupinu</label>
                 <div class="input-group">
                     <input type="text" class="form-control" @bind-value="_groupQuery" @bind-value:event="oninput" @ref="_groupInputRef">
-                    <button type="button" class="btn btn-outline-primary" @onclick="AddGroupFromInput" disabled="@string.IsNullOrWhiteSpace(_groupQuery)">Pridaù</button>
+                    <button type="button" class="btn btn-outline-primary" @onclick="AddGroupFromInput" disabled="@string.IsNullOrWhiteSpace(_groupQuery)">Prida≈•</button>
                 </div>
             </div>
         </div>
 
         <div class="col-md-4">
             <div class="mb-3">
-                <label class="form-label">VybranÈ uËebne</label>
+                <label class="form-label">Vybran√© uƒçebne</label>
                 <ul class="list-group">
                     @foreach (var r in _selectedRooms)
                     {
@@ -76,7 +76,7 @@
                 </ul>
             </div>
             <div class="mb-3 position-relative">
-                <label class="form-label">Pridaù uËebÚu</label>
+                <label class="form-label">Prida≈• uƒçeb≈àu</label>
                 <input type="text" class="form-control" value="@_roomQuery" @oninput="RoomInputChanged" @ref="_roomInputRef">
                 @if (_roomSuggestions.Any())
                 {
@@ -94,17 +94,17 @@
     <div class="mt-3 d-flex gap-3 align-items-center flex-wrap">
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="ignoreTeacherBlocks" @bind="_ignoreTeacherBlocks" />
-            <label class="form-check-label" for="ignoreTeacherBlocks">Ignorovaù bloky uËiteæov</label>
+            <label class="form-check-label" for="ignoreTeacherBlocks">Ignorova≈• bloky uƒçiteƒæov</label>
         </div>
         <button type="button" class="btn btn-primary" @onclick="SearchIntersections" disabled="@_searching">
             @if (_searching)
             {
                 <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
             }
-            Vyhæadaù prieniky
+            Vyhƒæada≈• prieniky
         </button>
         <button type="button" class="btn btn-outline-danger" @onclick="ClearAllSelections" disabled="@(!_selectedTeachers.Any() && !_selectedGroups.Any() && !_selectedRooms.Any())">
-            Vymazaù vöetko
+            Vymaza≈• v≈°etko
         </button>
         @if (!string.IsNullOrWhiteSpace(_searchError))
         {
@@ -116,7 +116,7 @@
 @if (_freeMap is not null)
 {
     <div class="mt-4">
-        <h5>VoænÈ bloky</h5>
+        <h5>Voƒæn√© bloky</h5>
         <div class="table-responsive">
             @{
                 var totalHalfCols = (ScheduleTable.LastBlockHour - ScheduleTable.FirstBlockHour + 1) * 2;
@@ -153,7 +153,7 @@
                                 {
                                     var colspan = span.DurationHalfSlots;
                                     <td class="free-cell" colspan="@colspan" rowspan="2" style="background-color:#e8f5e9; color:#1b5e20; white-space: pre-line;">
-                                        VoænÈ
+                                        Voƒæn√©
                                         @if (span.FreeRooms?.Any() == true)
                                         {
                                             <br />
@@ -235,7 +235,7 @@
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Nepodarilo sa naËÌtaù uËiteæov");
+                Logger.LogError(ex, "Nepodarilo sa naƒç√≠ta≈• uƒçiteƒæov");
             }
             StateHasChanged();
         }
@@ -295,7 +295,7 @@
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Nepodarilo sa naËÌtaù uËebne");
+                Logger.LogError(ex, "Nepodarilo sa naƒç√≠ta≈• uƒçebne");
             }
             StateHasChanged();
         }
@@ -459,8 +459,8 @@
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Chyba pri vyhæad·vanÌ prienikov");
-            _searchError = "Chyba pri vyhæad·vanÌ prienikov";
+            Logger.LogError(ex, "Chyba pri vyhƒæad√°van√≠ prienikov");
+            _searchError = "Chyba pri vyhƒæad√°van√≠ prienikov";
         }
         finally
         {
@@ -554,7 +554,7 @@
             DayOfWeek.Monday => "Pondelok",
             DayOfWeek.Tuesday => "Utorok",
             DayOfWeek.Wednesday => "Streda",
-            DayOfWeek.Thursday => "ätvrtok",
+            DayOfWeek.Thursday => "≈†tvrtok",
             DayOfWeek.Friday => "Piatok",
             _ => day.ToString()
         };

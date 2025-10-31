@@ -1,50 +1,9 @@
 ﻿table {
-    border-collapse: collapse;
     width: 100%;
     table-layout: fixed;
-    border: 2px solid black;
     margin: 5px;
-}
-
-table th {
-   text-align: left;
-   vertical-align: top;
-   border: 1px solid black;
-   background: #ecf0f1;
-   padding: 2px;
-}
-
-table td {
-    font-size: 12px;
-    vertical-align: top;
-    overflow: hidden;
-    width: auto;
-    border: 1px dotted #95a5a6;
-}
-
-table tbody tr {
-    height: 65px;
-}
-
-
-table thead  {
-    position: sticky;
-    top: 0;
-    background: white;
-}
-
-table thead tr {
-    height: 30px;
 }
 
 table tr th:first-child {
     width: 150px;
-}
-
-table td.blok {
-    border: black solid 1px;
-}
-
-table .first-day-row {
-    border-top: 2px solid black;
 }

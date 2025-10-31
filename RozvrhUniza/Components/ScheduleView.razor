@@ -1,78 +1,83 @@
 ﻿@using KST.UnizaSchedule.Table
 @using KST.UnizaSchedule.Api.Enums
+@using RozvrhUniza.Services
 
 @if (this.Data != null)
 {
     <div class="schedule">
-        <table>
-            <thead>
-            <tr>
-                <th>&nbsp;</th>
-                @for (int x = 0; x < ScheduleTable.BlockCount; x++)
-                {
-                    <th>@(x + ScheduleTable.FirstBlockHour):00</th>
-                }
-            </tr>
-            </thead>
-            <tbody>
-            @for (DayOfWeek y = DayOfWeek.Monday; y <= DayOfWeek.Friday; y++)
+    <table class="table-schedule w-100">
+    <thead>
+    <tr>
+    <th>&nbsp;</th>
+    @for (int x =0; x < ScheduleTable.BlockCount; x++)
+    {
+        <th>@(x + ScheduleTable.FirstBlockHour):00</th>
+    }
+    </tr>
+    </thead>
+    <tbody>
+    @for (DayOfWeek y = DayOfWeek.Monday; y <= DayOfWeek.Friday; y++)
+    {
+        var rowSpan = Data.Where(x => x.Day == y).Max(x => x.Count);
+        @for (var r =0; r < rowSpan; r++)
+        {
+            <tr class="@(r ==0 ? "first-day-row": "")">
+            @if (r ==0)
             {
-                var rowSpan = Data.Where(x => x.Day == y).Max(x => x.Count);
-                @for (var r = 0; r < rowSpan; r++)
+                <th rowspan="@rowSpan">@y</th>
+            }
+            @for (int x = ScheduleTable.FirstBlockHour; x <= ScheduleTable.LastBlockHour; x++)
+            {
+                var item = this.Data[y, x].Skip(r).FirstOrDefault();
+                
+                if (item != null)
                 {
-                    <tr class="@(r == 0 ? "first-day-row": "")">
-                        @if (r == 0)
+                    if (item.Duration ==0) continue;
+                    var bg = GetColor(item);
+                    var text = ColorUtils.GetIdealTextColor(bg);
+                    var border = ColorUtils.DarkenHex(bg,0.25);
+                    <td colspan="@item.Duration" class="@(item.LessonType == LessonType.Lecture ? "prednaska" : "") blok"
+                        style="background-color:@bg; color:@text; border-color:@border;">
+                        @if (item.LessonType == LessonType.Lecture)
                         {
-                            <th rowspan="@rowSpan">@y</th>
-                        }
-                        @for (int x = ScheduleTable.FirstBlockHour; x <= ScheduleTable.LastBlockHour; x++)
-                        {
-                            var item = this.Data[y, x].Skip(r).FirstOrDefault();
-                            
-                            if (item != null)
+                            <strong>prednáška</strong><br/>
+                            @item.TeacherName<br/>
+                            @item.RoomName
+                            @if (ShowSubject)
                             {
-                                if (item.Duration == 0) continue;
-                                <td colspan="@item.Duration" class="@(item.LessonType == LessonType.Lecture ? "prednaska" : "") blok" style="background-color: @(GetColor(item))">
-                                    @if (item.LessonType == LessonType.Lecture)
-                                    {
-                                        <strong>prednáška</strong><br/>
-                                        @item.TeacherName<br/>
-                                        @item.RoomName
-                                        @if (ShowSubject)
-                                        {
-                                            <br/>
-                                            @item.Subject
-                                        }
-                                    }
-                                    else if (item.LessonType == LessonType.Blocked)
-                                    {
-                                        <strong>blok</strong>
-                                        <br />
-                                        @item.TeacherName
-                                    }
-                                    else
-                                    {
-                                        @item.TeacherName<br/>
-                                        @item.Group<br/>
-                                        @item.RoomName
-                                        @if (ShowSubject)
-                                        {
-                                            <br/>
-                                            @item.Subject
-                                        }
-                                    }
-                                </td>
-                            }
-                            else
-                            {
-                                <td></td>
+                                <br/>
+                                @item.Subject
                             }
                         }
-                    </tr>
+                        else if (item.LessonType == LessonType.Blocked)
+                        {
+                            <strong>blok</strong>
+                            <br />
+                            @item.TeacherName
+                        }
+                        else
+                        {
+                            @item.TeacherName<br/>
+                            @item.Group<br/>
+                            @item.RoomName
+                            @if (ShowSubject)
+                            {
+                                <br/>
+                                @item.Subject
+                            }
+                        }
+                    </td>
+                }
+                else
+                {
+                    <td></td>
                 }
             }
-            </tbody>
-        </table>
+            </tr>
+        }
+    }
+    </tbody>
+    </table>
     </div>
 }
 
@@ -117,5 +122,4 @@
         }
         return "#dff9fb";
     }
-
 }

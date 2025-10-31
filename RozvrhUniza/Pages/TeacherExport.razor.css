@@ -9,7 +9,7 @@
  content: "";
  position: absolute;
  inset:2px;
- outline:2px dashed #0d6efd;
+ outline:2px dashed var(--link);
  pointer-events: none;
 }
 
@@ -31,4 +31,9 @@
 .table.preview-table th {
  overflow: hidden;
  text-overflow: ellipsis;
+}
+
+/* Make preview header slightly distinct in both themes (falls back if global already styles it) */
+.table.preview-table thead th {
+ background-color: color-mix(in srgb, var(--card-bg)88%, #ffffff12%);
 }

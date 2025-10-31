@@ -1,6 +1,7 @@
 ﻿@inherits LayoutComponentBase
 
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
 <div class="page d-flex flex-column min-vh-100">
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm sticky-top">
@@ -25,6 +26,9 @@
                         <NavLink class="nav-link" href="/vyhladavanie-prienikov">Vyhľadávanie prienikov</NavLink>
                     </li>
                 </ul>
+                <div class="ms-lg-3 mt-2 mt-lg-0">
+                    <button class="btn btn-outline-light btn-sm" @onclick="ToggleTheme">@_themeButtonText</button>
+                </div>
             </div>
         </div>
     </nav>
@@ -41,3 +45,40 @@
         </div>
     </footer>
 </div>
+
+@code {
+    private string _themeButtonText = "🌙 Tmavý";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var t = await JS.InvokeAsync<string>("theme.get");
+                UpdateButtonText(t);
+                StateHasChanged();
+            }
+            catch
+            {
+                // no-op if theme script not loaded yet
+            }
+        }
+    }
+
+    private async Task ToggleTheme()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("theme.toggle");
+            var t = await JS.InvokeAsync<string>("theme.get");
+            UpdateButtonText(t);
+        }
+        catch { }
+    }
+
+    private void UpdateButtonText(string? theme)
+    {
+        _themeButtonText = theme == "dark" ? "☀️ Svetlý" : "🌙 Tmavý";
+    }
+}

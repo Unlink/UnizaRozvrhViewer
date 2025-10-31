@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "RozvrhUniza",
   "resources": {
-    "hash": "sha256-UxC/8LHpa6U99vOGDxSXs/tYQezU5sYXIrfBFC0JDr0=",
+    "hash": "sha256-+CRaY7EQAE2hbIk3drzP7Iz65mStD48jmY0NydGUquY=",
     "fingerprinting": {
       "ClosedXML.Parser.kcd8ka7nog.wasm": "ClosedXML.Parser.wasm",
       "ClosedXML.6d8ybop3kc.wasm": "ClosedXML.wasm",
@@ -25,7 +25,7 @@
       "Microsoft.JSInterop.WebAssembly.imfqvv3x5h.wasm": "Microsoft.JSInterop.WebAssembly.wasm",
       "netstandard.0c6f9lzp5x.wasm": "netstandard.wasm",
       "RBush.048ali807d.wasm": "RBush.wasm",
-      "RozvrhUniza.6isf2phksp.wasm": "RozvrhUniza.wasm",
+      "RozvrhUniza.n3iz5rzsr7.wasm": "RozvrhUniza.wasm",
       "SixLabors.Fonts.1ntl3xbxha.wasm": "SixLabors.Fonts.wasm",
       "System.Buffers.vvxqd1zn23.wasm": "System.Buffers.wasm",
       "System.Collections.Concurrent.66swrkipj1.wasm": "System.Collections.Concurrent.wasm",
@@ -76,8 +76,8 @@
       "System.8rv0tdtrxz.wasm": "System.wasm",
       "System.Web.HttpUtility.ed9o3z7c7y.wasm": "System.Web.HttpUtility.wasm",
       "System.Xml.Linq.fnt4rzi185.wasm": "System.Xml.Linq.wasm",
-      "UnizaScheduleApi.mf9evi7h8x.wasm": "UnizaScheduleApi.wasm",
-      "UnizaScheduleTable.tefj96djis.wasm": "UnizaScheduleTable.wasm",
+      "UnizaScheduleApi.ea6r3pkjzg.wasm": "UnizaScheduleApi.wasm",
+      "UnizaScheduleTable.ji8hy6muad.wasm": "UnizaScheduleTable.wasm",
       "dotnet.native.ucrf0ih7wd.js": "dotnet.native.js",
       "dotnet.native.2oiair1ktq.wasm": "dotnet.native.wasm",
       "dotnet.js": "dotnet.js",
@@ -127,7 +127,7 @@
       "Microsoft.JSInterop.WebAssembly.imfqvv3x5h.wasm": "sha256-mpyjzA6YBuV9Qx5BUC8YbXP9YjZlM+k7YTVawzXJFgk=",
       "netstandard.0c6f9lzp5x.wasm": "sha256-MKUSNuhon9vW6r1r15fh5AxIfoqizGzlBJ9nlcBHp9k=",
       "RBush.048ali807d.wasm": "sha256-cHsLmPL/ZYfNtaqW793aQui9cR4N7JXjHm+xggcoz7w=",
-      "RozvrhUniza.6isf2phksp.wasm": "sha256-DpRlCKFomDwgUDnzbbxas7L+0hbmTvYISQyGJYJ7KRY=",
+      "RozvrhUniza.n3iz5rzsr7.wasm": "sha256-Y+ft0j6P9IdULOVAe5k2Iy3kUODoQcJR3lMlpigqJRM=",
       "SixLabors.Fonts.1ntl3xbxha.wasm": "sha256-TYAwAMga8iYHgcD5+CMUwDAmCjtNUbzJJP6/e+Xtl5w=",
       "System.Buffers.vvxqd1zn23.wasm": "sha256-C+/fQ/aua0gCDbhZ7/2gXnBRdt20DYYGXdCsodHff40=",
       "System.Collections.Concurrent.66swrkipj1.wasm": "sha256-Yn6F62wt/Yee820weOYNaQDbRaKLdbfTcxv8vO/ic3Y=",
@@ -176,8 +176,8 @@
       "System.8rv0tdtrxz.wasm": "sha256-xMF0eauQ5DkSzUozHLFFMQnL6DSJO09nJLtgag+Dzbw=",
       "System.Web.HttpUtility.ed9o3z7c7y.wasm": "sha256-cgRW9EBYuQ0gKwQbqB5lB1ITJSW8xSvfST4Z3my6W3s=",
       "System.Xml.Linq.fnt4rzi185.wasm": "sha256-5claBNmyy8L12DFLS17Fh4SBiTjwhYts3ds7g8dX8Gc=",
-      "UnizaScheduleApi.mf9evi7h8x.wasm": "sha256-viH0Nr/SSUCuWnGb8jovNUQ0Ni6LaU4kOuIfOi+Xj2k=",
-      "UnizaScheduleTable.tefj96djis.wasm": "sha256-OxoHW/9zUzKQS/Kycr7bolRhOVowsLiBa+aTqFf4/WE="
+      "UnizaScheduleApi.ea6r3pkjzg.wasm": "sha256-asCmdAzl2EyhDWk/E7/SPwHT+AEXNSkM0Zv+LgivUts=",
+      "UnizaScheduleTable.ji8hy6muad.wasm": "sha256-paCX30POc0jjB6tCVFwRLnAYPkgzmGk3+ChrpzQsopU="
     }
   },
   "cacheBootResources": true,

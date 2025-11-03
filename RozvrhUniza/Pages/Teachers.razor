@@ -1,4 +1,4 @@
-﻿@page "/teachers"
+@page "/teachers"
 @using KST.UnizaSchedule.Table
 @using KST.UnizaSchedule.Api
 @using KST.UnizaSchedule.Api.Enums
@@ -35,6 +35,12 @@
                     </ul>
                 }
             </div>
+
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="hideBlocks" @bind="_hideBlocked" @bind:after="OnHideBlockedChanged" />
+                <label class="form-check-label" for="hideBlocks">Skryť bloky</label>
+            </div>
+
             <button type="submit" class="btn btn-primary" @onclick="LoadRozvrh">Zobraziť rozvrh</button>
         </div>
         <div class="col-md-4">
@@ -93,15 +99,18 @@
     private GroupedScheduleTable? _sheduleData;
     private const string TeachersStorageKey = "vybrani_ucitelia";
     private const string TeacherGroupsStorageKey = "ucitelske_zalozky";
+    private const string HideBlocksStorageKey = "teachers_hide_blocks";
 
     private string _groupName = string.Empty;
     private List<TeacherGroup> _teacherGroups = new();
+    private bool _hideBlocked = false;
 
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
         await LoadTeachersFromLocalStorage();
         await LoadGroupsFromLocalStorage();
+        await LoadHideBlocksFromLocalStorage();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -134,6 +143,11 @@
                         RoomName = x.RoomName,
                         SubjectShortcut = x.SubjectShortcut
                     }));
+            }
+
+            if (_hideBlocked)
+            {
+                schedules = schedules.Where(s => s.LessonType != LessonType.Blocked).ToList();
             }
 
             this._sheduleData = schedules
@@ -270,5 +284,29 @@
             }
             catch { }
         }
+    }
+
+    private async Task OnHideBlockedChanged()
+    {
+        await SaveHideBlocksToLocalStorage();
+    }
+
+    private async Task SaveHideBlocksToLocalStorage()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(_hideBlocked);
+        await JS.InvokeVoidAsync("localStorage.setItem", HideBlocksStorageKey, json);
+    }
+
+    private async Task LoadHideBlocksFromLocalStorage()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string>("localStorage.getItem", HideBlocksStorageKey);
+            if (!string.IsNullOrWhiteSpace(json) && bool.TryParse(json, out var val))
+            {
+                _hideBlocked = val;
+            }
+        }
+        catch { }
     }
 }

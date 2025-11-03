@@ -25,16 +25,16 @@
       "url": "_framework\/ExcelNumberFormat.zkc9yronjy.wasm.br"
     },
     {
+      "hash": "sha256-kt7asG1NliWf84vWJSwc8N+vOWHw+d7zC6PMogLy2kg=",
+      "url": "_framework\/Microsoft.AspNetCore.Components.05jvtrly1f.wasm.br"
+    },
+    {
       "hash": "sha256-ds9MlfJ6JDfAEzVaNJwZBXSbecnBENbAP6obdE\/XqKM=",
       "url": "_framework\/Microsoft.AspNetCore.Components.Web.yphmymrgtg.wasm.br"
     },
     {
       "hash": "sha256-lu\/68iGjORORNI7QGZHiTbZebI+gbUnXnm97Iah+z1o=",
       "url": "_framework\/Microsoft.AspNetCore.Components.WebAssembly.rwpg67y8a3.wasm.br"
-    },
-    {
-      "hash": "sha256-xYTMPDQSBfQFZw8+6KpDULAr4oLSnxcRRY04Z6zdnGg=",
-      "url": "_framework\/Microsoft.AspNetCore.Components.ui4mfwpnd6.wasm.br"
     },
     {
       "hash": "sha256-FwFpsXXArMr\/saO89SSmQ0dhmKOHKSnEpqaVzbDiLOI=",
@@ -89,8 +89,8 @@
       "url": "_framework\/RBush.048ali807d.wasm.br"
     },
     {
-      "hash": "sha256-yqX+RWahaSVUhcyD2Dq\/x7NWdNIzfEDmE6i+061fsvc=",
-      "url": "_framework\/RozvrhUniza.n3iz5rzsr7.wasm.br"
+      "hash": "sha256-bh1nhUmj45KT\/DEGyTjHOrhfIzyQ54MV6TC\/pKEbmKA=",
+      "url": "_framework\/RozvrhUniza.qohjkbquu2.wasm.br"
     },
     {
       "hash": "sha256-CGbH3QnTkCC6\/HkEpeYYqxfcVWn5HEFnAeaMQ8B\/20g=",
@@ -293,15 +293,15 @@
       "url": "_framework\/System.Xml.Linq.fnt4rzi185.wasm.br"
     },
     {
-      "hash": "sha256-rqRUEnkuh3XimmeeBAtFyBtT+Xd7F+u9rrEJL4bxtdg=",
-      "url": "_framework\/UnizaScheduleApi.ea6r3pkjzg.wasm.br"
+      "hash": "sha256-ameSScZZ5ELzzwK1YqP9dJf\/vejOzTcx6EPC6qaLM1M=",
+      "url": "_framework\/UnizaScheduleApi.3bg6aqlba4.wasm.br"
     },
     {
-      "hash": "sha256-Lo9p+EzNF62yiofyHGrFsYeAUDbeilTKU9jhWUHcumE=",
-      "url": "_framework\/UnizaScheduleTable.ji8hy6muad.wasm.br"
+      "hash": "sha256-UZjGgqDIC8xYOgWG7jbbp8MffG0mMHsyUnD6QQkHfNc=",
+      "url": "_framework\/UnizaScheduleTable.ezypaf096p.wasm.br"
     },
     {
-      "hash": "sha256-cXWatMQQoqTksSa\/d20fZ+WRB7+nVoTvo3HkQIMBV44=",
+      "hash": "sha256-n\/mdW9wDy61Mg5IDPS4qlyjACGesjUxc2j9nWjtQ+uE=",
       "url": "_framework\/blazor.boot.json.br"
     },
     {
@@ -381,5 +381,5 @@
       "url": "brotliloader.min.js"
     }
   ],
-  "version": "21dnnMje"
+  "version": "3rjuBWxS"
 };

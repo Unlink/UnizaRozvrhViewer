@@ -4,6 +4,12 @@
 // Load the assets manifest generated during publish
 self.importScripts('./service-worker-assets.js');
 
+// Fix: define manifestUrlList (was referenced but not defined causing SW failure).
+// Use absolute URLs for comparison with event.request.url.
+const manifestUrlList = self.assetsManifest && self.assetsManifest.assets
+    ? self.assetsManifest.assets.map(a => new URL(a.url, self.location).href)
+    : [];
+
 self.addEventListener('install', event => {
     // Activate this service worker immediately on install
     self.skipWaiting();

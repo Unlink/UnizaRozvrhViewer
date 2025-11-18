@@ -1,0 +1,293 @@
+@page "/cache-management"
+@inject ServiceWorkerCacheService CacheService
+@using RozvrhUniza.Services
+
+<div class="container mt-4">
+    <h3>Správa Cache</h3>
+    
+    <div class="card mt-3">
+        <div class="card-body">
+            <h5 class="card-title">Nastavenia Cache</h5>
+            
+            @if (isServiceWorkerAvailable)
+            {
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle"></i> Service Worker je aktívny
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label"><strong>Dĺžka cache expirácie:</strong></label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="cacheDuration" id="duration1h" value="1h" 
+                               checked="@(selectedDuration == "1h")" @onclick="@(() => OnDurationChanged("1h"))">
+                        <label class="btn btn-outline-primary" for="duration1h">1 hodina</label>
+
+                        <input type="radio" class="btn-check" name="cacheDuration" id="duration1d" value="1d" 
+                               checked="@(selectedDuration == "1d")" @onclick="@(() => OnDurationChanged("1d"))">
+                        <label class="btn btn-outline-primary" for="duration1d">1 deň</label>
+
+                        <input type="radio" class="btn-check" name="cacheDuration" id="duration7d" value="7d" 
+                               checked="@(selectedDuration == "7d")" @onclick="@(() => OnDurationChanged("7d"))">
+                        <label class="btn btn-outline-primary" for="duration7d">7 dní</label>
+
+                        <input type="radio" class="btn-check" name="cacheDuration" id="duration30d" value="30d" 
+                               checked="@(selectedDuration == "30d")" @onclick="@(() => OnDurationChanged("30d"))">
+                        <label class="btn btn-outline-primary" for="duration30d">30 dní</label>
+                    </div>
+                    <div class="form-text">
+                        Aktuálna expirácia: @GetDurationText(currentDurationMs)
+                    </div>
+                </div>
+                
+                @if (cacheStats != null)
+                {
+                    <ul class="list-group mb-3">
+                        <li class="list-group-item">
+                            <strong>Počet cachovaných requestov:</strong> @cacheStats.CachedRequestsCount
+                        </li>
+                        <li class="list-group-item">
+                            <strong>Približná veľkosť cache:</strong> @cacheStats.EstimatedSizeFormatted
+                        </li>
+                    </ul>
+                }
+            }
+            else
+            {
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> Service Worker nie je dostupný
+                </div>
+            }
+            
+            <div class="mt-3">
+                <button class="btn btn-primary me-2" @onclick="RefreshStats" disabled="@isLoading">
+                    @if (isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    Obnoviť štatistiky
+                </button>
+                
+                <button class="btn btn-danger me-2" @onclick="ClearCache" disabled="@isLoading">
+                    @if (isClearing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    Vymazať cache
+                </button>
+
+                <button class="btn btn-secondary" @onclick="ToggleDebug">
+                    @(showDebug ? "Skryť debug" : "Zobraziť debug")
+                </button>
+            </div>
+            
+            @if (!string.IsNullOrEmpty(message))
+            {
+                <div class="alert alert-info mt-3">
+                    @message
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (showDebug)
+    {
+        <div class="card mt-3">
+            <div class="card-body">
+                <h5 class="card-title">Debug Informácie</h5>
+                
+                @if (allCaches != null && allCaches.Any())
+                {
+                    <p><strong>Všetky caches v prehliadači:</strong></p>
+                    <ul class="list-group">
+                        @foreach (var cache in allCaches)
+                        {
+                            <li class="list-group-item">
+                                <code>@cache</code>
+                                @if (cache.Contains("uniza-api-cache"))
+                                {
+                                    <span class="badge bg-success ms-2">API Cache</span>
+                                }
+                                @if (cache.Contains("uniza-settings-cache"))
+                                {
+                                    <span class="badge bg-info ms-2">Settings</span>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="text-muted">Žiadne caches nenájdené</p>
+                }
+
+                <div class="mt-3">
+                    <p><strong>Ako testovať cache:</strong></p>
+                    <ol>
+                        <li>Otvor Developer Tools (F12)</li>
+                        <li>Prejdi na Application → Cache Storage</li>
+                        <li>Hľadaj cache s názvom obsahujúcim "uniza-api-cache"</li>
+                        <li>Vyskúšaj načítať nejaký rozvrh (napr. na hlavnej stránke)</li>
+                        <li>Vráť sa sem a klikni "Obnoviť štatistiky"</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    }
+    
+    <div class="card mt-3">
+        <div class="card-body">
+            <h5 class="card-title">Ako funguje cachovanie?</h5>
+            <ul>
+                <li><strong>Automatické cachovanie:</strong> Všetky API requesty sa automaticky cachujú v Service Worker</li>
+                <li><strong>Expirácia:</strong> Cache vyprší po nastavenej dobe od uloženia</li>
+                <li><strong>Offline podpora:</strong> Ak nie je dostupné internetové pripojenie, aplikácia použije cachovaný obsah</li>
+                <li><strong>Stratégia:</strong> Cache First - najprv sa skúsi použiť cache, potom sieť</li>
+            </ul>
+            
+            <h6 class="mt-3">Odporúčania pre dĺžku cache:</h6>
+            <ul>
+                <li><strong>1 hodina:</strong> Pre často sa meniace rozvrhy (napr. počas skúškového obdobia)</li>
+                <li><strong>1 deň:</strong> Optimálne pre bežné použitie</li>
+                <li><strong>7 dní:</strong> Pre stabilné rozvrhy počas semestra</li>
+                <li><strong>30 dní:</strong> Pre dlhodobé použitie (maximálna úspora dát)</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isServiceWorkerAvailable = false;
+    private CacheStatistics? cacheStats;
+    private List<string>? allCaches;
+    private bool isLoading = false;
+    private bool isClearing = false;
+    private bool showDebug = false;
+    private string message = "";
+    private string selectedDuration = "1d";
+    private long? currentDurationMs;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckServiceWorkerAvailability();
+        if (isServiceWorkerAvailable)
+        {
+            await LoadCurrentDuration();
+            await LoadCacheStats();
+        }
+    }
+
+    private async Task CheckServiceWorkerAvailability()
+    {
+        isServiceWorkerAvailable = await CacheService.IsServiceWorkerAvailableAsync();
+    }
+
+    private async Task LoadCurrentDuration()
+    {
+        try
+        {
+            currentDurationMs = await CacheService.GetCacheDurationAsync();
+            if (currentDurationMs.HasValue)
+            {
+                // Map milliseconds back to duration key
+                selectedDuration = currentDurationMs.Value switch
+                {
+                    <= 60 * 60 * 1000 => "1h",
+                    <= 24 * 60 * 60 * 1000 => "1d",
+                    <= 7 * 24 * 60 * 60 * 1000 => "7d",
+                    _ => "30d"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading duration: {ex.Message}");
+        }
+    }
+
+    private async Task LoadCacheStats()
+    {
+        isLoading = true;
+        message = "";
+        try
+        {
+            cacheStats = await CacheService.GetCacheStatisticsAsync();
+            if (showDebug)
+            {
+                allCaches = await CacheService.ListAllCachesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"Chyba pri načítaní štatistík: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshStats()
+    {
+        await LoadCurrentDuration();
+        await LoadCacheStats();
+        message = "Štatistiky obnovené";
+    }
+
+    private async Task ClearCache()
+    {
+        isClearing = true;
+        message = "";
+        try
+        {
+            await CacheService.ClearApiCacheAsync();
+            message = "Cache bola vymazaná";
+            await Task.Delay(500); // Small delay to let SW process the message
+            await LoadCacheStats();
+        }
+        catch (Exception ex)
+        {
+            message = $"Chyba pri mazaní cache: {ex.Message}";
+        }
+        finally
+        {
+            isClearing = false;
+        }
+    }
+
+    private async Task ToggleDebug()
+    {
+        showDebug = !showDebug;
+        if (showDebug)
+        {
+            allCaches = await CacheService.ListAllCachesAsync();
+        }
+    }
+
+    private async Task OnDurationChanged(string duration)
+    {
+        selectedDuration = duration;
+        try
+        {
+            await CacheService.SetCacheDurationAsync(duration);
+            await LoadCurrentDuration();
+            message = $"Dĺžka cache nastavená na: {GetDurationText(currentDurationMs)}";
+        }
+        catch (Exception ex)
+        {
+            message = $"Chyba pri nastavení cache: {ex.Message}";
+        }
+    }
+
+    private string GetDurationText(long? durationMs)
+    {
+        if (!durationMs.HasValue) return "neznáma";
+        
+        return durationMs.Value switch
+        {
+            <= 60 * 60 * 1000 => "1 hodina",
+            <= 24 * 60 * 60 * 1000 => "1 deň",
+            <= 7 * 24 * 60 * 60 * 1000 => "7 dní",
+            _ => "30 dní"
+        };
+    }
+}

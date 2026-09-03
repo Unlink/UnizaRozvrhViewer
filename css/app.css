@@ -288,3 +288,26 @@ code {
         margin-right: auto !important;
     }
 }
+
+@media print {
+    @page {
+        size: A4 landscape;
+        margin: 10mm;
+    }
+
+    body:has(.rooms-page-print) nav,
+    body:has(.rooms-page-print) footer,
+    body:has(.rooms-page-print) .rooms-print-hidden {
+        display: none !important;
+    }
+
+    body:has(.rooms-page-print) main > .container {
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+
+    body:has(.rooms-page-print) .rooms-print-schedule {
+        width: 100%;
+        margin: 0;
+    }
+}

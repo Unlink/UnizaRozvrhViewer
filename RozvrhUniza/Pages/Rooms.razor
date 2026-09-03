@@ -1,0 +1,164 @@
+@page "/rooms"
+
+@using KST.UnizaSchedule.Table
+@using KST.UnizaSchedule.Api
+@using KST.UnizaSchedule.Api.ScheduleRequests
+@using RozvrhUniza.Components
+
+@inject ILogger<Rooms> Logger
+@inject IJSRuntime JS
+
+<PageTitle>Prehľadný rozvrh - Miestnosti</PageTitle>
+
+<div class="rooms-page-print">
+    <form onsubmit="return false;" class="rooms-print-hidden">
+        <div class="mb-3 position-relative">
+            <label class="form-label">Miestnosť</label>
+            <input type="text" class="form-control" value="@_roomQuery" @oninput="RoomInputChanged" @ref="_roomInputRef">
+            @if (_roomSuggestions.Any())
+            {
+                <ul class="dropdown-menu d-block">
+                    @foreach (var s in _roomSuggestions)
+                    {
+                        <li @onclick="() => SelectRoom(s)"><a class="dropdown-item">@s.Name</a></li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <button type="submit" class="btn btn-primary" @onclick="LoadRozvrh" disabled="@(_selectedRoom is null)">Zobraziť rozvrh</button>
+    </form>
+
+    @if (_sheduleData != null)
+    {
+        <div class="rooms-print-schedule">
+            <ScheduleView Data="@this._sheduleData" ShowSubject="true" TrimGroups="true" ColorBy="ScheduleView.ColorType.Subject" />
+        </div>
+    }
+
+    @if (_hasError)
+    {
+        <div class="alert alert-danger rooms-print-hidden" role="alert">
+            Rozvrh nenájdený!
+        </div>
+    }
+</div>
+
+@code {
+    private const string SelectedRoomStorageKey = "rooms_selected_room";
+
+    private UnizaRoom? _selectedRoom;
+    private string _roomQuery = string.Empty;
+    private List<UnizaRoom> _roomSuggestions = new();
+    private CancellationTokenSource? _roomCts;
+    private ElementReference _roomInputRef;
+
+    private bool _hasError = false;
+    private GroupedScheduleTable? _sheduleData;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        await LoadSelectedRoomFromLocalStorage();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await _roomInputRef.FocusAsync();
+        }
+    }
+
+    private async Task RoomInputChanged(ChangeEventArgs arg)
+    {
+        var text = arg.Value?.ToString();
+        _roomQuery = text ?? string.Empty;
+
+        if (_selectedRoom is not null && !string.Equals(_selectedRoom.Name, _roomQuery, StringComparison.Ordinal))
+        {
+            _selectedRoom = null;
+            _sheduleData = null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            var cts = new CancellationTokenSource();
+            _roomCts?.Cancel();
+            _roomCts = cts;
+            try
+            {
+                var result = await ScheduleApi.GetUnizaRooms(_roomQuery, cts.Token);
+                _roomSuggestions = result.ToList();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Nepodarilo sa načítať učebne");
+            }
+            StateHasChanged();
+        }
+        else
+        {
+            _roomSuggestions.Clear();
+        }
+    }
+
+    private async Task SelectRoom(UnizaRoom room)
+    {
+        _selectedRoom = room;
+        _roomQuery = room.Name;
+        _roomSuggestions.Clear();
+        await SaveSelectedRoomToLocalStorage();
+    }
+
+    private async Task LoadRozvrh()
+    {
+        this._sheduleData = null;
+        _hasError = false;
+
+        if (_selectedRoom is null || !int.TryParse(_selectedRoom.Id, out var roomId))
+        {
+            _hasError = true;
+            return;
+        }
+
+        try
+        {
+            this._sheduleData = (await ScheduleApi.GetUnizaScheduleContentAsync(new RoomScheduleRequest(roomId)))
+                .MergeMultipleTeachers()
+                .ToTable()
+                .GroupSameBlocks();
+            _hasError = false;
+        }
+        catch (Exception ex)
+        {
+            _hasError = true;
+            Logger.LogError(ex, "Nepodarilo sa načítať rozvrh miestnosti");
+        }
+        StateHasChanged();
+    }
+
+    private async Task SaveSelectedRoomToLocalStorage()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(_selectedRoom);
+        await JS.InvokeVoidAsync("localStorage.setItem", SelectedRoomStorageKey, json);
+    }
+
+    private async Task LoadSelectedRoomFromLocalStorage()
+    {
+        var json = await JS.InvokeAsync<string>("localStorage.getItem", SelectedRoomStorageKey);
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            try
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<UnizaRoom>(json);
+                if (loaded != null)
+                {
+                    _selectedRoom = loaded;
+                    _roomQuery = loaded.Name;
+                }
+            }
+            catch { }
+        }
+    }
+}

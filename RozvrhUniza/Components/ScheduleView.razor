@@ -1,4 +1,4 @@
-﻿@using KST.UnizaSchedule.Table
+@using KST.UnizaSchedule.Table
 @using KST.UnizaSchedule.Api.Enums
 @using RozvrhUniza.Services
 
@@ -41,8 +41,12 @@
                         @if (item.LessonType == LessonType.Lecture)
                         {
                             <strong>prednáška</strong><br/>
-                            @item.TeacherName<br/>
-                            @item.RoomName
+                            @item.TeacherName
+                            @if (!string.IsNullOrWhiteSpace(item.RoomName))
+                            {
+                                <br />
+                                @item.RoomName
+                            }
                             @if (ShowSubject)
                             {
                                 <br/>
@@ -57,9 +61,21 @@
                         }
                         else
                         {
-                            @item.TeacherName<br/>
-                            @item.Group<br/>
-                            @item.RoomName
+                            @item.TeacherName<br/> 
+                            @if (TrimGroups && item.Group.Split(',').Length > 2)
+                            {
+                                @string.Join(", ", item.Group.Split(',').Take(2))<text>...</text>
+                            }
+                            else
+                            {
+                                @item.Group
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(item.RoomName))
+                            {
+                                <br />
+                                @item.RoomName
+                            }
                             @if (ShowSubject)
                             {
                                 <br/>
@@ -82,11 +98,23 @@
 }
 
 @code {
+    public enum ColorType
+    {
+        Teacher,
+        Subject
+    }
+
     [Parameter]
     public GroupedScheduleTable? Data { get; set; }
 
     [Parameter]
     public bool ShowSubject { get; set; } = false;
+
+    [Parameter]
+    public bool TrimGroups { get; set; } = false;
+
+    [Parameter]
+    public ColorType ColorBy { get; set; } = ColorType.Teacher;
 
     private static string[] Colors = new[]
     {
@@ -111,14 +139,16 @@
             return "#bdc3c7";
         }
 
-        if (_colorMap.TryGetValue(item.TeacherName, out var value))
+        var key = ColorBy == ColorType.Teacher ? item.TeacherName : item.Subject;
+
+        if (_colorMap.TryGetValue(key, out var value))
         {
             return Colors[value];
         } 
         else if (_colorMap.Count < Colors.Length)
         {
-            _colorMap[item.TeacherName] = _colorMap.Count;
-            return Colors[_colorMap[item.TeacherName]];
+            _colorMap[key] = _colorMap.Count;
+            return Colors[_colorMap[key]];
         }
         return "#dff9fb";
     }

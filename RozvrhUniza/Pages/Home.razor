@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @using KST.UnizaSchedule.Table
 @using KST.UnizaSchedule.Api
 @using KST.UnizaSchedule.Api.Enums
@@ -136,6 +136,7 @@
                 _year,
                 _semester)))
                 .MergeMultipleTeachers()
+                .MergeMultipleBlocksOfOnePerson()
                 .ToTable()
                 .GroupSameBlocks();
             _hasError = false;
